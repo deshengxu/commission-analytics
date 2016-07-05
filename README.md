@@ -5,7 +5,7 @@ Sample data will not be shared into repository due to security concern.
 
 **Simple process**:
 
-1) check current folder name:
+1) check current folder name: (**Done**!)
 
     1.1) it should be in pattern like: FY16Q3
     
@@ -13,15 +13,15 @@ Sample data will not be shared into repository due to security concern.
     
 2) check booking numbers from all past Q
 
-    2.1) If current current Q is not Q1, then booking number file should be available.
+    2.1) If current current Q is not Q1, then booking number file should be available.(**Done**)
     
-    2.2) Search FY16Q1-Booking.csv and FY16Q2-Booking.csv in current folder
+    2.2) Search FY16Q1-Booking.csv and FY16Q2-Booking.csv in current folder (**Done**)
     
-    2.3) if not, search FY16Q1-Booking.csv and FY16Q2-Booking.csv in FY16Q2 folder
+    2.3) if not, search FY16Q1-Booking.csv and FY16Q2-Booking.csv in FY16Q2 folder(**~~Postpone~~**)
     
-    2.4) if not found FY16Q1-Booking.csv, then search it in FY16Q1 folder.
+    2.4) if not found FY16Q1-Booking.csv, then search it in FY16Q1 folder.(**~~Postpone~~**)
     
-    2.5) both files must exist, otherwise stop.
+    2.5) both files must exist, otherwise stop. (**Done**)
     
 3) Refine booking files:
 
