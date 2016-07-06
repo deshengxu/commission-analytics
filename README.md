@@ -23,7 +23,7 @@ Sample data will not be shared into repository due to security concern.
     
     2.5) both files must exist, otherwise stop. (**Done**)
     
-3) Refine booking files:
+3) Refine booking files: (**Done**)
 
     3.1) Go through each booking file
     
@@ -35,7 +35,7 @@ Sample data will not be shared into repository due to security concern.
     
     3.5) Save refined booking file in current folder with name: Refined-FY16Q1-Booking.csv etc.
     
-4) Generate Booking Total:
+4) Generate Booking Total: 
 
     4.1) Load each refined booking csv file as DataFrame and 'Employee No' column will be index column.
     
@@ -47,7 +47,7 @@ Sample data will not be shared into repository due to security concern.
     
     4.4) Export merged booking data into file:FY16BookingYTD.csv as log
     
-5) Refine SFDC data:
+5) Refine SFDC data: (**Done**)
 
     5.1) Go through each opportunity line
     
