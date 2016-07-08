@@ -79,8 +79,8 @@ def refine_sfdc(sfdc_files, current_year, current_quarter):
                         except:
                             tmp_str = cell.strip()
                             data_list.append(tmp_str)
-                        if rix == 1:
-                            print(cell + "\t-->" + tmp_str)
+                            # if rix == 1:
+                            #    print(cell + "\t-->" + tmp_str)
 
                     newcsv.writerow(data_list)
 

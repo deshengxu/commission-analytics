@@ -59,11 +59,24 @@ Sample data will not be shared into repository due to security concern.
     
     5.5) Save refined SFDC file in current folder with name: Refined-SFDC.csv
     
-6) Pivot SFDC:
+6) Pivot SFDC: (**Done**)
 
     6.1) Load Refined-SFDC.csv as DataFrame
     
-    6.2) "Employee No" and "Opportunity" will be index column both.
+    6.2) "Employee No" will be index column both.
     
-    6.3) TBD
+    6.3) Pivot key will be configurable, which by default is "EMPLOYEE NO"
+    
+    6.4) Pivot columns will be configurable.
+    
+7) Hierarchy Build Up
+    
+    7.1) Load Emp hierarchy after refine
+    
+    7.2) Define EMP class
+    
+    7.3) Define direct report list.
+    
+    7.4) Define report to list. (TBD)
+    
     
