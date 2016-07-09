@@ -35,7 +35,7 @@ Sample data will not be shared into repository due to security concern.
     
     3.5) Save refined booking file in current folder with name: Refined-FY16Q1-Booking.csv etc.
     
-4) Generate Booking Total: 
+4) Generate Booking Total: (**Done**)
 
     4.1) Load each refined booking csv file as DataFrame and 'Employee No' column will be index column.
     

@@ -5,6 +5,7 @@
 import os
 import sys
 import csv
+import pandas as pd
 
 sys.path.append(".")
 
@@ -34,7 +35,9 @@ def refine_booking(booking_files, current_year, current_quarter):
     for booking_file in booking_files:
         success = False
         newfilename = os.path.join(os.path.dirname(booking_file), "Refined-" + os.path.basename(booking_file))
-        refined_booking_list.append(newfilename)
+        cleanedfilename = os.path.join(os.path.dirname(booking_file), "Cleaned-" + os.path.basename(booking_file))
+
+        # refined_booking_list.append(newfilename)
 
         with open(booking_file, "r") as oldfile, open(newfilename, "w") as newfile:
             oldcsv = csv.reader(oldfile)
@@ -48,8 +51,8 @@ def refine_booking(booking_files, current_year, current_quarter):
                 if first_line:
                     header_list = []
                     for ix, cell in enumerate(line):
-                        tmp_str = (cell.upper().replace(tmp_fy_str, "").replace(tmp_q_str, "")).strip()
-                        tmp_str = tmp_str.replace("?", "")
+                        tmp_str = (cell.upper().replace(tmp_fy_str, "").replace(tmp_q_str, ""))
+                        tmp_str = tmp_str.replace("?", "").strip()
                         if tmp_str == "NAME":
                             name_index = ix
                         else:
@@ -78,7 +81,13 @@ def refine_booking(booking_files, current_year, current_quarter):
                             #    print(cell + "\t-->"+ tmp_str)
 
                     newcsv.writerow(data_list)
+            df = pd.read_csv(newfilename, index_col="EMPLOYEE NO")
+            for col in df.columns:
+                if 'TOTAL' in col:
+                    del df[col]
 
+            df.to_csv(cleanedfilename)
+            refined_booking_list.append(cleanedfilename)
             success = True
 
     return success, refined_booking_list
