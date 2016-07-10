@@ -69,7 +69,7 @@ Sample data will not be shared into repository due to security concern.
     
     6.4) Pivot columns will be configurable.
     
-7) Hierarchy Build Up
+7) Hierarchy Build Up (**Done**)
     
     7.1) Load Emp hierarchy after refine
     
