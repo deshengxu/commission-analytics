@@ -77,6 +77,9 @@ Sample data will not be shared into repository due to security concern.
     
     7.3) Define direct report list.
     
-    7.4) Define report to list. (TBD)
+    7.4) Define report to list.
+    
+    7.5) Provide hierarchy chat for validation.
+    
     
     
