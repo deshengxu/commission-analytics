@@ -69,6 +69,8 @@ Sample data will not be shared into repository due to security concern.
     
     6.4) Pivot columns will be configurable.
     
+    6.5) Pivot Big deal
+    
 7) Hierarchy Build Up (**Done**)
     
     7.1) Load Emp hierarchy after refine
@@ -80,6 +82,39 @@ Sample data will not be shared into repository due to security concern.
     7.4) Define report to list.
     
     7.5) Provide hierarchy chat for validation.
+
+8) Refine Geo-Forecast Data
+
+    8.1) Data Clean (TBD)
     
+    8.2) Verification (TBD)
     
+9) Calculation Process (Best Forecast):
+    
+    9.1) From Geo-Forecast data, query all lowest level sales list.
+    
+    9.2) From Q1/Q2 booking list, filter records for those sales man only.
+    
+    9.3) Merge filtered booking together and assign different columns names.
+    
+    9.4) Rule 1: if total booking > certain numbers, sales will not be included in next two steps allocation.
+    
+    9.5) Rule 2: Remove big deal both from SFDC pivot and Geo-Forecast; 
+    
+        9.5.1) then allocate rest of direct manager's Geo-forecast to direct sales proportionally.
+        
+        9.5.2) Calculate sales total for next step.
+        
+        9.5.3) Individual Sales will has a max cap. over allocation will be captured and reallocated later.
+    
+    9.6) Rule 3: Allocate Geo-Forecast from uplevel managers to all direct sales proportionally.
+        
+        9.6.1) Individual Sales will has a max cap. over allocation will be captured and reallocated later.
+    
+    9.7) Rule 4: Allocate rest Geo-Forecast to all sales.
+    
+10) Calculate Process (Minimal Commission):
+    
+11) Calculate Process (Maximal Commission):
+
     

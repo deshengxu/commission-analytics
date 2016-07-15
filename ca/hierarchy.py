@@ -18,10 +18,10 @@ class Hierarchy:
 
     def get_base_position(self):
         page_left_margin = 0.2
-        block_width = 1.6
-        block_w_gap = 0.6
+        block_width = 4.0
+        block_w_gap = 2.0
         page_bottom_margin = 0.2
-        block_height = 0.8
+        block_height = 1.0
         block_h_gap = 0.4
 
         return page_left_margin, block_width, block_w_gap, page_bottom_margin, block_height, block_h_gap
