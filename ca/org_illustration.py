@@ -9,10 +9,14 @@ try:
     from . import salesman
     from . import hierarchy
     from . import bezier
+    from . import casession
+    from . import ca_utility
 except:
     import salesman
     import hierarchy
     import bezier
+    import casession
+    import ca_utility
 
 
 def illustrate(new_hierarchy, position):
@@ -120,15 +124,32 @@ def draw_line(parent_emp_no, parent_emp, parent_rec, new_h, position, fig, ax):
 
 def main():
     # new_h = build_hierarchy_from_sample()
-    new_h = hierarchy.build_hierarchy_from_csv('../Sample/FY16Q3/FY16Q3-Hierarchy.csv')
+    # new_h = hierarchy.build_hierarchy_from_csv('../Sample/FY16Q3/FY16Q3-Hierarchy.csv')
 
     # width, depth = new_h.get_depth_width()
     # print("Width:%d, \tDepth:%d\n" % (width, depth))
 
-    position = new_h.generate_position()
-    # print(position)
+    test_str1 = r"/Users/desheng/builds/commission-analytics/Sample/FY16Q3"
 
-    illustrate(new_h, position)
+    ca_session = casession.CASession(test_str1)
+    # print(ca_session.get_hierarchy())
+
+    ca_session.clean_bookings()
+    ca_utility.clean_SFDC_files(ca_session)
+    # print(ca_session.get_cleaned_SFDC_filelist())
+
+    ca_utility.pivot_SFDC_files(ca_session)
+    # print(ca_session.get_pivot_SFDC_filelist())
+    ca_utility.clean_GEO_forecast(ca_session)
+    ca_utility.build_sales_manager_map(ca_session)
+    # print(ca_utility.get_unique_saleslist(ca_session))
+    ca_utility.filter_booking_SFDC(ca_session)
+    ca_utility.summary_filtered_pivot_SFDC(ca_session)
+    ca_utility.merge_SFDC_summary_with_manager(ca_session)
+
+    # position = ca_session.get_hierarchy().generate_position()
+    # print(position)
+    #illustrate(ca_session.get_hierarchy(), position)
 
 
 if __name__ == "__main__":

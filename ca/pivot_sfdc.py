@@ -79,9 +79,27 @@ def pivot_one_sfdc(sfdc_file, sfdc_load_key, sfdc_pivot_key, sfdc_pivot_header):
 
     sfdc_dataframe = pd.read_csv(sfdc_file, index_col=sfdc_load_key)
 
+    # generate pivot file without big deal filtering
     pivoted_file_name = os.path.join(os.path.dirname(sfdc_file), "Pivot_" + os.path.basename(sfdc_file))
 
     pivot_dataframe = pd.pivot_table(sfdc_dataframe, index=sfdc_pivot_key, values=sfdc_pivot_header, aggfunc=np.sum)
+
+    pivot_dataframe.to_csv(pivoted_file_name)
+
+    # generate pivot file with big deal as filtering
+    pivoted_file_name = os.path.join(os.path.dirname(sfdc_file), "Pivot_bigdealfiltering" + os.path.basename(sfdc_file))
+
+    pivot_dataframe = pd.pivot_table(sfdc_dataframe, index=sfdc_pivot_key, columns=["BIG DEAL"],
+                                     values=sfdc_pivot_header, aggfunc=np.sum)
+
+    pivot_dataframe.to_csv(pivoted_file_name)
+
+    # generate pivot file with big deal as index
+    pivoted_file_name = os.path.join(os.path.dirname(sfdc_file), "Pivot_bigdealindexing" + os.path.basename(sfdc_file))
+
+    index_keys = [sfdc_pivot_key, "BIG DEAL"]
+
+    pivot_dataframe = pd.pivot_table(sfdc_dataframe, index=index_keys, values=sfdc_pivot_header, aggfunc=np.sum)
 
     pivot_dataframe.to_csv(pivoted_file_name)
 

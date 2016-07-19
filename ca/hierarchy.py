@@ -17,9 +17,13 @@ class Hierarchy:
         self.__position = {}  # emp_no: "x,y"
 
     def get_base_position(self):
+        '''
+        this function should be replaced by class mothod in casession class.
+        :return:
+        '''
         page_left_margin = 0.2
         block_width = 4.0
-        block_w_gap = 2.0
+        block_w_gap = 3.0
         page_bottom_margin = 0.2
         block_height = 1.0
         block_h_gap = 0.4
@@ -38,7 +42,8 @@ class Hierarchy:
         page_left_margin, block_width, block_w_gap, page_bottom_margin, block_height, block_h_gap = self.get_base_position()
 
         if not self.__top_emp:
-            return 0, 0  # if no top boss, then width and depth can't be calculated.
+            raise ValueError(
+                "Can't find top boss in hierarchy!")  # if no top boss, then width and depth can't be calculated.
         top_boss = self.__emp_list.get(self.__top_emp, None)
         if not top_boss:
             raise ValueError("Can't find top boss based emp no!")
@@ -201,6 +206,23 @@ class Hierarchy:
                 boss_list.extend(uplevel_boss_list)
         return boss_list
 
+    def get_all_lowest_reporters(self, manager):
+        '''
+        bypass middle level manager and return all lowest level sales rep for a manager.
+        :param manager:
+        :return:
+        '''
+        reporters_list = []
+        current_reporters = manager.get_reporters()
+        for reporter in current_reporters:
+            next_salesman = self.__emp_list.get(reporter, None)
+            if next_salesman:
+                if not next_salesman.is_manager():
+                    reporters_list.append(reporter)
+                else:
+                    reporters_list.extend(self.get_all_lowest_reporters(next_salesman))
+        return reporters_list
+
     def get_sales_allreporters(self, existing_salesman):
         '''
         return all children reporters from current salesman
@@ -222,11 +244,11 @@ class Hierarchy:
         :param new_salesman:
         :return:
         '''
-        if new_salesman.get_emp_no() in self.__emp_list.keys():
+        if new_salesman.get_emp_no() in self.__emp_list.keys():  # if already exists, then do nothing
             return
 
-        existing_reporters = self.collect_reporters(new_salesman)
-        new_salesman.add_reporters(existing_reporters)
+        existing_reporters = self.collect_reporters(new_salesman)  # search existing reporters in list
+        new_salesman.add_reporters(existing_reporters)  # add as current reporters
 
         # check current all reporters are not any level of managers.
         all_bosses = self.get_salesman_allbosses(new_salesman)
@@ -246,17 +268,18 @@ class Hierarchy:
             # this is top boss
             self.__top_emp = new_salesman.get_emp_no()
         else:
-            existing_boss = self.__emp_list.get(current_boss_list[0], None)
+            existing_boss = self.__emp_list.get(current_boss_list[0], None)  # only pickup first one.
             if existing_boss:
                 if not (new_salesman.get_emp_no() in existing_boss.get_reporters()):
                     existing_boss.add_reporters([new_salesman.get_emp_no()])
 
         # sync reporters role.
-        current_reporters_list = new_salesman.get_reporters()
-        for emp_no in current_reporters_list:
-            reporter = self.__emp_list.get(emp_no, None)
-            if reporter:
-                reporter.set_boss(emp_no)
+                    # current_reporters_list = new_salesman.get_reporters()
+                    # for emp_no in current_reporters_list:
+                    #    reporter = self.__emp_list.get(emp_no, None)
+                    #    if reporter:
+                    # reporter.set_boss(emp_no)  # find a bug, boss can't be setup correctly
+                    #        reporter.set_boss(new_salesman.get_emp_no())
 
 
 def build_hierarchy_from_csv(csvfile):

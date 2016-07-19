@@ -42,6 +42,7 @@ def refine_sfdc(sfdc_files, current_year, current_quarter):
 
             first_line = True
             name_index = -1
+            big_deal_index = -1
             tmp_fy_str = 'FY%2d' % current_year
             tmp_q_str = 'Q%d' % current_quarter
             for rix, line in enumerate(oldcsv):
@@ -58,6 +59,9 @@ def refine_sfdc(sfdc_files, current_year, current_quarter):
                         else:
                             header_list.append(tmp_str)
 
+                        if tmp_str == "BIG DEAL":
+                            big_deal_index = ix
+
                     newcsv.writerow(header_list)
                     first_line = False
                 else:
@@ -72,10 +76,18 @@ def refine_sfdc(sfdc_files, current_year, current_quarter):
                         try:
                             if ix != name_index:
                                 tmp_str = cell.strip().replace(",", "")
-                                if tmp_str == "-":
-                                    tmp_str = "0.0"
-                                float(tmp_str)
-                                data_list.append(tmp_str)
+                                if ix == big_deal_index:
+                                    if not (tmp_str.upper() == "YES"):
+                                        tmp_str = "NO"
+                                    else:
+                                        tmp_str = "YES"
+
+                                    data_list.append(tmp_str)
+                                else:
+                                    if tmp_str == "-":
+                                        tmp_str = "0.0"
+                                    float(tmp_str)
+                                    data_list.append(tmp_str)
                         except:
                             tmp_str = cell.strip()
                             data_list.append(tmp_str)

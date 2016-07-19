@@ -11,14 +11,12 @@ try:
     from . import folder_validator
     from . import sfdc_validator
     from . import sfdc_refiner
-    from . import booking_refiner
-    from . import booking_validator
+    from . import casession
 except:
     import folder_validator
     import sfdc_validator
     import sfdc_refiner
-    import booking_refiner
-    import booking_validator
+    import casession
 
 
 def getConfiguration(section=r'Booking Summary Rule', configuration_file=r'./config.ini'):
@@ -110,25 +108,9 @@ def calculate_total_booking(booking_files, section=r'Booking Summary Rule', conf
 
 def main():
     test_str1 = r"/Users/desheng/builds/commission-analytics/Sample/FY16Q3"
-    validated, current_year, current_quarter = folder_validator.validate_current_folder(test_str1)
-    filelists = None
-    if validated:
-        validated, filelists = booking_validator.validate_booking_files(test_str1, current_year, current_quarter)
-    else:
-        print("Stopped at booking_validator!")
-        return
+    ca_session = casession.CASession(test_str1)
 
-    if validated:
-        validated, filelists = booking_refiner.refine_booking(filelists, current_year, current_quarter)
-    else:
-        print("Stopped at booking_refiner!")
-        return
-
-    if validated:
-        validated, filelists = calculate_total_booking(filelists)
-    else:
-        print("Stopped at calculate_total_booking!")
-        return
+    validated, filelists = calculate_total_booking(ca_session.get_cleaned_booking_filelist())
 
     if validated:
         print(filelists)

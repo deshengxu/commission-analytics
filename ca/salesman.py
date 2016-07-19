@@ -13,6 +13,9 @@ class Salesman:
     def get_emp_no(self):
         return self.__emp_no
 
+    def is_manager(self):
+        return len(self.__reporters) > 0
+
     def get_name(self):
         return self.__emp_name
 
