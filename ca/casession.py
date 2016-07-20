@@ -61,6 +61,18 @@ class CASession:
         self.__initialize_default_files()
         self.__init_subfolders()
 
+    def get_booking_enigible_list_filename(self):
+        self.__booking_enigible_list_file = os.path.join(
+            self.__processing_folder, "20-Booking-Enigible-List.csv"
+        )
+        return self.__booking_enigible_list_file
+
+    def get_merged_GEO_SFDC_BigDeal_filename(self):
+        self.__merged_GEO_SFDC_BigDeal_file = os.path.join(
+            self.__processing_folder, "15-Merged-GEO-SFDC-BigDeal.csv"
+        )
+        return self.__merged_GEO_SFDC_BigDeal_file
+
     def get_pivot_manager_SFDC_BigDeal_filename(self):
         self.__pivot_manager_SFDC_BigDeal_file = os.path.join(
             self.__processing_folder, "10-Pivot-MGR-SFDC-BigDeal.csv"

@@ -146,7 +146,7 @@ def main():
     ca_utility.filter_booking_SFDC(ca_session)
     ca_utility.summary_filtered_pivot_SFDC(ca_session)
     ca_utility.merge_SFDC_summary_with_manager(ca_session)
-
+    ca_utility.merge_summary_filtered_booking(ca_session)
     # position = ca_session.get_hierarchy().generate_position()
     # print(position)
     #illustrate(ca_session.get_hierarchy(), position)

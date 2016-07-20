@@ -25,13 +25,83 @@ def calculate_remaining_GEO(ca_session):
     return
 
 
+def get_key_from_filename(filename, ca_session):
+    index_key = "FY%2dQ" % ca_session.get_year()
+    index_found = filename.rfind(index_key)
+
+    return filename[index_found:index_found + 6]
+
+
+def merge_summary_filtered_booking(ca_session):
+    '''sum booking based on predefined keys in two sections
+    [Booking Summary Rule] and [SFDC Summary Rule]
+    only common keys will be used'''
+    summary_keys = getGeneralConfigurationKeys("SFDC Summary Rule", ca_session.get_configuration_file())
+    # print(summary_keys)
+    summary_cols = getGeneralConfigurationDict("Booking Summary Rule", ca_session.get_configuration_file())
+    # print(summary_cols)
+    booking_list = ca_session.get_filtered_booking_filelist()
+    booking_df_dict = {}
+    for booking_file in booking_list:
+        booking_df = pd.read_csv(booking_file, index_col="EMPLOYEE NO")
+        fyq_key = get_key_from_filename(booking_file, ca_session)  # FY16Q2 etc.
+
+        for key, column_list in summary_cols.iteritems():
+            if key.upper() in summary_keys:
+                booking_df[key.upper()] = booking_df[column_list].sum(axis=1)
+
+        for col in booking_df.columns:
+            if not col in summary_keys:
+                booking_df.drop(col, axis=1, inplace=True)
+
+        # rename col with key.
+        for col in booking_df.columns:
+            booking_df.rename(columns={col: col + "-" + fyq_key}, inplace=True)
+
+        booking_df_dict[fyq_key] = booking_df
+
+    # merge all DFs
+    first = True
+    summary_df = None
+    for key, df in booking_df_dict.iteritems():
+        if first:
+            summary_df = df
+            first = False
+        else:
+            summary_df = summary_df.join(df)
+
+    # summary each Q booking again.
+    for key in summary_keys:
+        column_list = []
+        for col in summary_df.columns:
+            if col.startswith(key.upper()):
+                column_list.append(col)
+        summary_df[key.upper()] = summary_df[column_list].sum(axis=1)
+
+    # read threshold
+    threshold_dict = getGeneralConfigurationThreshold("Booking Enigible Threshold",
+                                                      ca_session.get_configuration_file())
+
+    for key, threshold_value in threshold_dict.iteritems():
+        summary_df[(key.upper() + "_ENIGIBLE")] = (summary_df[(key.upper())] < threshold_value)
+
+    # print(summary_df)
+    summary_df.to_csv(ca_session.get_booking_enigible_list_filename())
+
+
 def merge_SFDC_summary_with_manager(ca_session):
+    '''
+    calculate remaining GEO after big deal reduction.
+    :param ca_session:
+    :return:
+    '''
     # only deal with default SFDC
     sfdc_file = ca_session.get_summarized_filtered_pivot_sfdc_file()
     sfdc_df = pd.read_csv(sfdc_file, index_col='EMPLOYEE NO')
 
     sales_map = ca_session.get_sales_manager_mapping_file()
     sales_map_df = pd.read_csv(sales_map, index_col='EMPLOYEE NO', dtype=object)
+
     sales_map_df = sales_map_df[sales_map_df['LOWESTLEVEL'] == 'TRUE']
     merged_df = sales_map_df.join(sfdc_df)
 
@@ -43,18 +113,21 @@ def merge_SFDC_summary_with_manager(ca_session):
 
     pivot_mgr_df = pd.pivot_table(merged_df, index='MANAGER', values=config_keys, fill_value=0)
     pivot_mgr_df.index.names = ['EMPLOYEE NO']
+    pivot_mgr_df.index = pivot_mgr_df.index.map(int)
     pivot_mgr_df.to_csv(ca_session.get_pivot_manager_SFDC_BigDeal_filename())
 
-    cleaned_GEO_df = pd.read_csv(ca_session.get_cleaned_GEO_filename(), index_col='EMPLOYEE NO')
+    cleaned_GEO_df = pd.read_csv(ca_session.get_cleaned_GEO_filename(), index_col='EMPLOYEE NO',
+                                 dtype=object)
     cleaned_GEO_df.sort_index(inplace=True)
-    deducted_mgr_df = cleaned_GEO_df.join(pivot_mgr_df, lsuffix='_plan', rsuffix='_bigdeal', )
-    deducted_mgr_df = deducted_mgr_df.fillna(0)
-    # for col in config_keys:
-    #    deducted_mgr_df[col] = deducted_mgr_df[col+'_plan'] - deducted_mgr_df[col+'bigdeal']
-    print(pivot_mgr_df)
-    print(deducted_mgr_df)
 
-    # print(pivot_mgr_df)
+    deducted_mgr_df = cleaned_GEO_df.join(pivot_mgr_df, lsuffix='_plan', rsuffix='_bigdeal')
+    deducted_mgr_df = deducted_mgr_df.fillna(0)
+    for col in config_keys:
+        plan_col = "%s_plan" % col
+        bigdeal_col = "%s_bigdeal" % col
+        deducted_mgr_df[plan_col] = deducted_mgr_df[plan_col].astype(float)
+        deducted_mgr_df[col] = deducted_mgr_df[plan_col].sub(deducted_mgr_df[bigdeal_col], axis=0)
+    deducted_mgr_df.to_csv(ca_session.get_merged_GEO_SFDC_BigDeal_filename())
 
 
 def summary_filtered_pivot_SFDC(ca_session):
@@ -283,6 +356,45 @@ def getGeneralConfigurationDict(section, configuration_file=r'./config.ini'):
 
     return return_dict
 
+
+def getGeneralConfigurationThreshold(section, configuration_file=r'./config.ini'):
+    ''' read threshold value from configuration file.'''
+    caconfig = ConfigParser.ConfigParser()
+    caconfig.read(configuration_file)
+    current_config = {}
+
+    options = caconfig.options(section)
+    return_dict = {}
+
+    for option in options:
+        current_config[option] = caconfig.get(section, option)
+        return_dict[option] = convert_threshold_to_float(current_config[option])
+
+    return return_dict
+
+
+def convert_threshold_to_float(threshold_str):
+    '''
+    1.5M, 1M, 1 M, 2.2 m, 2.2M, 3.2K, 3.3 k, 3300, 3,300 etc.
+    :param threshold_str:
+    :return: float number
+    '''
+    new_str = None
+    if threshold_str[-1] in 'MmKk':
+        new_str = (threshold_str[:-2]).strip().replace(",", "")
+    else:
+        new_str = threshold_str.strip().replace(",", "")
+
+    factor = 1.0
+    if threshold_str[-1] in 'Mm':
+        factor = 1000000.0
+    elif threshold_str[-1] in 'Kk':
+        factor = 1000.0
+
+    try:
+        return float(new_str) * factor
+    except:
+        raise ValueError("%s can't be converted!" % threshold_str)
 
 def getGeneralConfigurationKeys(section, configuration_file=r'./config.ini'):
     caconfig = ConfigParser.ConfigParser()
