@@ -61,6 +61,12 @@ class CASession:
         self.__initialize_default_files()
         self.__init_subfolders()
 
+    def get_allocation_step1_filename(self):
+        self.__allocation_step1_filename = os.path.join(
+            self.__processing_folder, "25-Allocation-Step1.csv"
+        )
+        return self.__allocation_step1_filename
+
     def get_booking_enigible_list_filename(self):
         self.__booking_enigible_list_file = os.path.join(
             self.__processing_folder, "20-Booking-Enigible-List.csv"
@@ -207,6 +213,11 @@ class CASession:
             self.__pivot_sfdc_filelist = []
             self.__pivot_sfdc_file = pivot_file  # setup first as default.
         self.__pivot_sfdc_filelist.append(pivot_file)
+
+    def get_default_pivot_SFDC_file(self):
+        if not self.__pivot_sfdc_file:
+            raise ValueError("Default pivot SFDC file hasn't been initalized yet!")
+        return self.__pivot_sfdc_file
 
     def get_SFDC_filelist(self):
         if not self.__sfdc_filelist:

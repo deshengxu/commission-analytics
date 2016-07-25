@@ -13,15 +13,43 @@ except:
     import casession
 
 
-def calculate_remaining_GEO(ca_session):
+def allocate_remaining_GEO(ca_session):
     '''
-    reduct SFDC summary from GEO.
+    allocate SFDC summary from GEO after big deal reduction.
     have to be careful for a stiuation that a up level manager who has many low level managers but also
     has individual direct sales rep in GEO forecast.
     this has to be avoided from GEO forecast check.
     :param ca_session:
     :return:
     '''
+
+    # step 1, get all non-big deal SFDC (from file Pivot-FY6Q3-SFDC.csv)
+    # Step 2, filtered by Eligible List
+    # Step 3, summary posivie numbers by manager in Step 1 and calculate percentage
+    # Step 4, Split 15-Merged-GEO-SFDC-BigDeal based on percentage.
+
+    # Step 1, beginning code is copied from summary_filtered_pivot_SFDC()
+    # but changed criteria from "YES" to NO.
+    # and changed from file list to default SFDC pivoted file.
+    config_dict = getGeneralConfigurationDict("SFDC Summary Rule", ca_session.get_configuration_file())
+    # get summary title list.
+    filtered_pivot = ca_session.get_default_pivot_SFDC_file()  # get default filtered_pivot_SFDC, not file list.
+
+    allocation_step1_sfdc = ca_session.get_allocation_step1_filename()
+    filtered_df = pd.read_csv(filtered_pivot, index_col=['EMPLOYEE NO', 'BIG DEAL'])
+    for key, column_list in config_dict.iteritems():
+        filtered_df[(key.upper() + "-NONBIGDEAL")] = filtered_df[column_list].sum(axis=1)
+        filtered_df = filtered_df.drop(column_list, axis=1)
+
+    for col in filtered_df.columns:
+        if "TOTAL" in col:
+            filtered_df.drop(col, axis=1, inplace=True)
+
+    filtered_df = filtered_df.iloc[filtered_df.index.get_level_values('BIG DEAL') == 'NO']
+    filtered_df.reset_index(level=1, drop=True, inplace=True)
+    filtered_df.to_csv(allocation_step1_sfdc)
+
+    # Step 2, merge with Eligible list.
     return
 
 
@@ -86,7 +114,7 @@ def merge_summary_filtered_booking(ca_session):
         summary_df[(key.upper() + "_ENIGIBLE")] = (summary_df[(key.upper())] < threshold_value)
 
     # print(summary_df)
-    summary_df.to_csv(ca_session.get_booking_enigible_list_filename())
+    summary_df.to_csv(ca_session.get_booking_enigible_list_filename())  # 20-Booking-Enigible-List
 
 
 def merge_SFDC_summary_with_manager(ca_session):
@@ -114,7 +142,7 @@ def merge_SFDC_summary_with_manager(ca_session):
     pivot_mgr_df = pd.pivot_table(merged_df, index='MANAGER', values=config_keys, fill_value=0)
     pivot_mgr_df.index.names = ['EMPLOYEE NO']
     pivot_mgr_df.index = pivot_mgr_df.index.map(int)
-    pivot_mgr_df.to_csv(ca_session.get_pivot_manager_SFDC_BigDeal_filename())
+    pivot_mgr_df.to_csv(ca_session.get_pivot_manager_SFDC_BigDeal_filename())  # 10-Pivot-MGR-SFDC-BigDeal
 
     cleaned_GEO_df = pd.read_csv(ca_session.get_cleaned_GEO_filename(), index_col='EMPLOYEE NO',
                                  dtype=object)
@@ -127,7 +155,7 @@ def merge_SFDC_summary_with_manager(ca_session):
         bigdeal_col = "%s_bigdeal" % col
         deducted_mgr_df[plan_col] = deducted_mgr_df[plan_col].astype(float)
         deducted_mgr_df[col] = deducted_mgr_df[plan_col].sub(deducted_mgr_df[bigdeal_col], axis=0)
-    deducted_mgr_df.to_csv(ca_session.get_merged_GEO_SFDC_BigDeal_filename())
+    deducted_mgr_df.to_csv(ca_session.get_merged_GEO_SFDC_BigDeal_filename())  # 15-Merged-GEO-SFDC-BigDeal
 
 
 def summary_filtered_pivot_SFDC(ca_session):
