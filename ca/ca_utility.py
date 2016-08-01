@@ -239,7 +239,7 @@ def allocate_remaining_GEO(ca_session):
         zero_mgr_df = zero_key_df.groupby('MANAGER')[nonbigdeal_sum_key].agg(['count'])
         # print(zero_mgr_df)
         for index, row in zero_mgr_df.iterrows():
-            print index, row['count']
+            # print index, row['count']
             key_df.loc[key_df['MANAGER'] == index, nonbigdeal_ratio_key] = 1.0 / (float(row['count']))
         # print(zero_mgr_df.columns)
         # combine rest of GEO

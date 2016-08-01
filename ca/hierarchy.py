@@ -300,7 +300,7 @@ class Hierarchy:
         # print(self.__emp_list)
         issue_no_list = []
         for emp_no, emp in self.__emp_list.iteritems():
-            print(emp)
+            # print(emp)
             current_boss_list = emp.get_boss()
             if len(current_boss_list) == 0:
                 print("%s may be top boss since it does't have boss!" % emp_no)
@@ -309,13 +309,16 @@ class Hierarchy:
                 if not existing_boss:
                     print("%s may have data issue since its' boss %s can't be found!" %
                           (emp_no, current_boss_list[0]))
-                    print(emp)
+                    #print(emp)
                     if not current_boss_list[0] in issue_no_list:
                         issue_no_list.append(current_boss_list[0])
 
-        print("\n\nSummary of missing info sales or manager:")
-        print(issue_no_list)
-        print("\n\n")
+        if len(issue_no_list) > 0:
+            print("\n\nSummary of missing info sales or manager:")
+            print(issue_no_list)
+            print("\n\n")
+        else:
+            print("No issue found in hierarchy data!")
 
     def add_salesman(self, new_salesman):
         '''

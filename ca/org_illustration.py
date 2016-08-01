@@ -19,7 +19,7 @@ except:
     import ca_utility
 
 
-def illustrate(new_hierarchy, position):
+def illustrate(new_hierarchy, position, imafile="../Sample/hierarchy.svg"):
     _, block_width, _, _, block_height, _ = new_hierarchy.get_base_position()
 
     max_x = 0.0
@@ -27,6 +27,7 @@ def illustrate(new_hierarchy, position):
 
     fig, ax = plt.subplots()
     fig.set_size_inches(29.7 * 2, 21.1)
+
     for emp_no, emp_positions in position.iteritems():
         strx, stry = emp_positions.split(",")
         cx = float(strx)
@@ -59,15 +60,23 @@ def illustrate(new_hierarchy, position):
 
     max_x += block_width + 0.2
     max_y += block_height + 0.2
-    # ax.set_xlim((0, max_x))
-    # ax.set_ylim((0, max_y))
-    ax.set_xlim((0, 21.1 * 1.5))
-    ax.set_ylim((0, 29.7 * 5))
+
+    ax.set_xlim((0, max_x))
+    ax.set_ylim((0, max_y))
+    # ax.set_xlim((0, 21.1))
+    # ax.set_ylim((0, 29.7 * 5))
     ax.set_aspect('equal')
+
+    DPI = fig.get_dpi()
+    fig.set_size_inches(max_x / (320 / DPI), max_y / (320 / DPI), forward=True)
+    print "DPI:", DPI
+    DefaultSize = fig.get_size_inches()
+    print "Default size in Inches", DefaultSize
+    print "Which should result in a %i x %i Image" % (DPI * DefaultSize[0], DPI * DefaultSize[1])
 
     # fig.savefig("../Sample/hierarchy.png", dpi=300)
     # fig.set_size_inches(max_x,max_y)
-    fig.savefig("../Sample/hierarchy.svg", transparent=True, bbox_inches='tight', pad_inches=0)
+    fig.savefig(imafile, transparent=True, bbox_inches='tight', pad_inches=0)
     # fig.savefig('../Sample/hierarchy.eps', format='eps', dpi=1000)
     #plt.show()
 
@@ -140,11 +149,10 @@ def main():
 
     ca_session = casession.CASession(test_str1)
     ca_session.get_hierarchy().validate_emp_list()
-    # position = ca_session.get_hierarchy().generate_position()
+    position = ca_session.get_hierarchy().generate_position()
     # print(position)
-    #illustrate(ca_session.get_hierarchy(), position)
+    illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
     # print(ca_session.get_hierarchy())
-
     ca_session.clean_bookings()
     ca_utility.clean_SFDC_files(ca_session)
     # print(ca_session.get_cleaned_SFDC_filelist())
@@ -167,6 +175,7 @@ def main():
     ca_utility.combine_SFDC_allocation(ca_session)
     ca_utility.roll_up_SFDC_GEO(ca_session)
     '''
+
     #print(ca_session.get_hierarchy().get_emp_list())
 
     '''

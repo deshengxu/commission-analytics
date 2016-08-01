@@ -62,6 +62,10 @@ class CASession:
         self.__initialize_default_files()
         self.__init_subfolders()
 
+    def get_img_filename(self):
+        return os.path.join(
+            self.__processing_folder, '00-Ora-Chart.svg'
+        )
     def get_all_managers_list(self):
         if not self.__all_managers:
             raise ValueError("self.__all_managers hasn't been initialized yet!")
