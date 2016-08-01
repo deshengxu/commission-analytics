@@ -56,38 +56,88 @@ class CASession:
 
         self.__cleaned_geo_file = None
         self.__sales_plannedmgr_mapping_file = None
+        self.__all_managers = None  # all up level managers of current lowest level sales rep.
 
         self.__init_from_folder(folder)
         self.__initialize_default_files()
         self.__init_subfolders()
 
+    def get_all_managers_list(self):
+        if not self.__all_managers:
+            raise ValueError("self.__all_managers hasn't been initialized yet!")
+        return self.__all_managers
+
+    def build_all_managers_list(self, emp_list):
+        '''
+        based on recevied emp list to find out all of their managers
+        and then store them in variable self.__all_managers
+        :param emp_list:
+        :return:
+        '''
+        if not emp_list:
+            raise ValueError("emp_list can't be None in build_all_managers_list!")
+
+        self.__all_managers = self.__hierarchy.get_multiple_sales_allbosses(emp_list)
+
+        return self.__all_managers
+
+    def get_manager_rollup_filename(self):
+        return os.path.join(
+            self.__processing_folder, "40-Manager-Rollup.csv"
+        )
+
+    def get_combined_sfdc_allocation_filename(self):
+        return os.path.join(
+            self.__processing_folder, "35-SFDC-GEO-Allocation.csv"
+        )
+
+    def get_split_key_filename(self, key):
+        return os.path.join(
+            self.__processing_folder, "30-" + key + "-Allocation.csv"
+        )
+
     def get_allocation_step1_filename(self):
         self.__allocation_step1_filename = os.path.join(
-            self.__processing_folder, "25-Allocation-Step1.csv"
+            self.__processing_folder, "25-Allocation.csv"
         )
         return self.__allocation_step1_filename
 
-    def get_booking_enigible_list_filename(self):
-        self.__booking_enigible_list_file = os.path.join(
-            self.__processing_folder, "20-Booking-Enigible-List.csv"
+    def get_booking_eligible_list_filename(self):
+        self.__booking_eligible_list_file = os.path.join(
+            self.__processing_folder, "20-Booking-Eligible-List.csv"
         )
-        return self.__booking_enigible_list_file
+        return self.__booking_eligible_list_file
 
-    def get_merged_GEO_SFDC_BigDeal_filename(self):
-        self.__merged_GEO_SFDC_BigDeal_file = os.path.join(
-            self.__processing_folder, "15-Merged-GEO-SFDC-BigDeal.csv"
+    def get_20_booking_eligible_list_file(self):
+        if not self.__booking_eligible_list_file:
+            raise ValueError("self.__booking_eligible_list_file hasn't been initialized yet!")
+        return self.__booking_eligible_list_file
+
+    def get_15_merged_GEO_SFDC_sum_file(self):
+        if not self.__merged_GEO_SFDC_sum_file:
+            raise ValueError("self.__merged_GEO_SFDC_sum_file hasn't been initialized yet!")
+        return self.__merged_GEO_SFDC_sum_file
+
+    def get_merged_GEO_SFDC_sum_filename(self):
+        self.__merged_GEO_SFDC_sum_file = os.path.join(
+            self.__processing_folder, "15-Merged-GEO-SFDC-sum.csv"
         )
-        return self.__merged_GEO_SFDC_BigDeal_file
+        return self.__merged_GEO_SFDC_sum_file
 
-    def get_pivot_manager_SFDC_BigDeal_filename(self):
-        self.__pivot_manager_SFDC_BigDeal_file = os.path.join(
-            self.__processing_folder, "10-Pivot-MGR-SFDC-BigDeal.csv"
+    def get_pivot_manager_SFDC_sum_filename(self):
+        self.__pivot_manager_SFDC_sum_file = os.path.join(
+            self.__processing_folder, "10-Pivot-MGR-SFDC-sum.csv"
         )
-        return self.__pivot_manager_SFDC_BigDeal_file
+        return self.__pivot_manager_SFDC_sum_file
 
-    def get_merged_SFDC_BigDeal_filename(self):
-        self.__merged_SFDC_BigDeal_file = os.path.join(self.__processing_folder, "05-Merged-SFDC-BigDeal-Manager.csv")
-        return self.__merged_SFDC_BigDeal_file
+    def get_merged_SFDC_sum_filename(self):
+        self.__merged_SFDC_sum_file = os.path.join(self.__processing_folder, "05-Merged-SFDC-sum-Manager.csv")
+        return self.__merged_SFDC_sum_file
+
+    def get_05_merged_SFDC_sum_file(self):
+        if not self.__merged_SFDC_sum_file:
+            raise ValueError("05-Merged_SFDC_sum_file hasn't been initialized yet!")
+        return self.__merged_SFDC_sum_file
 
     def get_summarized_filtered_pivot_sfdc_file(self):
         if not self.__summarized_filtered_pivot_SFDC_file:
@@ -108,6 +158,11 @@ class CASession:
     def get_summarized_filtered_pivot_sfdc_filename(self, filtered_pivot):
         basename = os.path.basename(filtered_pivot)
         return os.path.join(self.__processing_folder, "01-Summarized-" + basename)
+
+    def get_default_filterd_pivot_SFDC_file(self):
+        if not self.__filtered_pivot_SFDC_file:
+            raise ValueError("Filtered Pivot SFDC file hasn't been initialized yet!")
+        return self.__filtered_pivot_SFDC_file
 
     def add_filtered_pivot_SFDC_file(self, filtered_pivot_sfdc):
         if not self.__filtered_pivot_SFDC_filelist:
@@ -411,13 +466,15 @@ class CASession:
             raise ValueError("Can't find commission plan file %s in project folder!" % (commission_plan_file))
 
     def __initialize_hierarchy(self, csvfile):
-        df = pd.read_csv(csvfile, index_col='EMPLOYEE NO', dtype={'EMPLOYEE NO': object, 'MANAGER': object})
+        df = pd.read_csv(csvfile, index_col='EMPLOYEE NO',
+                         dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object})
         # print(df)
 
         self.__hierarchy = hierarchy.Hierarchy()
         for index, row in df.iterrows():
             # print index, row['NAME'], row['MANAGER']
-            new_sales = salesman.Salesman(str(index), row['NAME'])  # index has to be converted to string.
+            new_sales = salesman.Salesman(str(index), row['NAME'],
+                                          str(row['Status']))  # index has to be converted to string.
             if pd.notnull(row['MANAGER']):
                 new_sales.set_boss(row['MANAGER'])
                 # print(new_sales)

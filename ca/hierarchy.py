@@ -42,6 +42,7 @@ class Hierarchy:
         page_left_margin, block_width, block_w_gap, page_bottom_margin, block_height, block_h_gap = self.get_base_position()
 
         if not self.__top_emp:
+            self.validate_emp_list()
             raise ValueError(
                 "Can't find top boss in hierarchy!")  # if no top boss, then width and depth can't be calculated.
         top_boss = self.__emp_list.get(self.__top_emp, None)
@@ -190,18 +191,51 @@ class Hierarchy:
 
         return future_reporters
 
+    def get_multiple_sales_allbosses(self, emp_list, existing_bosses=None):
+        '''
+        get all uplevel managers from a list of sales
+        :param emp_list:
+        :param existing_bosses: initialiy it's blank, it will include existing managers in recursive call.
+        :return:
+        '''
+        boss_list = []
+        for emp in emp_list:
+            current_sales = self.__emp_list.get("%d" % emp, None)
+            if not current_sales:
+                raise ValueError("get_multiple_sales_allbosses met a sales with wrong ID:%s" % emp)
+
+            current_bosses = current_sales.get_boss()
+            if len(current_bosses) > 0:  # indeed, ony first one will be deal with
+                his_boss = current_bosses[0]
+                if not his_boss:
+                    return boss_list
+
+                his_boss_int = int(his_boss)
+
+                # print("Sales:%s->Manager:%s" % (emp, his_boss_int))
+
+                if existing_bosses and (not his_boss_int in existing_bosses):
+                    boss_list.append(his_boss_int)
+                    boss_list.extend(self.get_multiple_sales_allbosses([his_boss_int], boss_list))
+                elif not existing_bosses and (not his_boss_int in boss_list):
+                    boss_list.append(his_boss_int)
+                    boss_list.extend(self.get_multiple_sales_allbosses([his_boss_int], boss_list))
+
+        return boss_list
+
     def get_salesman_allbosses(self, existing_salesman):
         '''
         return a list of all level of boss of this sales man.
         :param existing_salesman:
-        :return:
+        :return: manager in object
         '''
         boss_list = []
-        current_bosses = existing_salesman.get_boss();
+        current_bosses = existing_salesman.get_boss()
         if len(current_bosses) > 0:
             boss_list.extend(current_bosses)
             uplevel_boss = self.__emp_list.get(current_bosses[0], None)
             if uplevel_boss:
+                #boss_list.append(uplevel_boss)
                 uplevel_boss_list = self.get_salesman_allbosses(uplevel_boss)
                 boss_list.extend(uplevel_boss_list)
         return boss_list
@@ -210,7 +244,7 @@ class Hierarchy:
         '''
         bypass middle level manager and return all lowest level sales rep for a manager.
         :param manager:
-        :return:
+        :return: emp_no list
         '''
         reporters_list = []
         current_reporters = manager.get_reporters()
@@ -223,11 +257,35 @@ class Hierarchy:
                     reporters_list.extend(self.get_all_lowest_reporters(next_salesman))
         return reporters_list
 
+    def get_all_reporters_and_selfobj(self, managerkey):
+        manager = self.__emp_list.get("%d" % managerkey, None)
+        if not manager:
+            raise ValueError("Can't found %s in manager list!" % managerkey)
+        return self.get_all_reporters_and_self(manager)
+
+    def get_all_reporters_and_self(self, manager):
+        '''
+        get all low level reporters and managers and himself in one list
+        :param manager:
+        :return: object list
+        '''
+        reporters_list = []
+        reporters_list.append(manager)  # add him_self
+        current_reporters = manager.get_reporters()
+        for reporter in current_reporters:
+            next_salesman = self.__emp_list.get(reporter, None)
+            if next_salesman:
+                if not next_salesman.is_manager():
+                    reporters_list.append(next_salesman)
+                else:
+                    reporters_list.extend(self.get_all_reporters_and_self(next_salesman))
+        return reporters_list
+
     def get_sales_allreporters(self, existing_salesman):
         '''
         return all children reporters from current salesman
         :param existing_salesman:
-        :return:
+        :return: emp_no list
         '''
         reporters_list = []
         current_reporters = existing_salesman.get_reporters()
@@ -237,6 +295,27 @@ class Hierarchy:
             if next_salesman:
                 reporters_list.extend(self.get_sales_allreporters(next_salesman))
         return reporters_list
+
+    def validate_emp_list(self):
+        # print(self.__emp_list)
+        issue_no_list = []
+        for emp_no, emp in self.__emp_list.iteritems():
+            print(emp)
+            current_boss_list = emp.get_boss()
+            if len(current_boss_list) == 0:
+                print("%s may be top boss since it does't have boss!" % emp_no)
+            else:
+                existing_boss = self.__emp_list.get(current_boss_list[0], None)  # only pickup first one.
+                if not existing_boss:
+                    print("%s may have data issue since its' boss %s can't be found!" %
+                          (emp_no, current_boss_list[0]))
+                    print(emp)
+                    if not current_boss_list[0] in issue_no_list:
+                        issue_no_list.append(current_boss_list[0])
+
+        print("\n\nSummary of missing info sales or manager:")
+        print(issue_no_list)
+        print("\n\n")
 
     def add_salesman(self, new_salesman):
         '''
@@ -283,13 +362,14 @@ class Hierarchy:
 
 
 def build_hierarchy_from_csv(csvfile):
-    df = pd.read_csv(csvfile, index_col='EMPLOYEE NO', dtype={'EMPLOYEE NO': object, 'MANAGER': object})
+    df = pd.read_csv(csvfile, index_col='EMPLOYEE NO', dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object})
     #print(df)
 
     new_h = Hierarchy()
     for index, row in df.iterrows():
         # print index, row['NAME']
-        new_sales = salesman.Salesman(str(index), row['NAME'])  # index has to be converted to string.
+        new_sales = salesman.Salesman(str(index), row['NAME'],
+                                      str(row['Status']))  # index has to be converted to string.
         if pd.notnull(row['MANAGER']):
             new_sales.set_boss(row['MANAGER'])
 
@@ -355,7 +435,7 @@ def build_hierarchy_from_sample():
 
 def main():
     # new_h = build_hierarchy_from_sample()
-    new_h = build_hierarchy_from_csv('../Sample/FY16Q3/hierarchy.csv')
+    new_h = build_hierarchy_from_csv('../Sample/FY16Q3/FY16Q3-Hierarchy.csv')
 
     top_emp = new_h.get_top_emp()
     if top_emp:

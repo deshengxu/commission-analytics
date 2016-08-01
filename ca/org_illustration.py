@@ -26,7 +26,7 @@ def illustrate(new_hierarchy, position):
     max_y = 0.0
 
     fig, ax = plt.subplots()
-    fig.set_size_inches(29.7, 21.1)
+    fig.set_size_inches(29.7 * 2, 21.1)
     for emp_no, emp_positions in position.iteritems():
         strx, stry = emp_positions.split(",")
         cx = float(strx)
@@ -61,14 +61,14 @@ def illustrate(new_hierarchy, position):
     max_y += block_height + 0.2
     # ax.set_xlim((0, max_x))
     # ax.set_ylim((0, max_y))
-    ax.set_xlim((0, 21.1 * 2))
-    ax.set_ylim((0, 29.7 * 3))
+    ax.set_xlim((0, 21.1 * 1.5))
+    ax.set_ylim((0, 29.7 * 5))
     ax.set_aspect('equal')
 
     # fig.savefig("../Sample/hierarchy.png", dpi=300)
     # fig.set_size_inches(max_x,max_y)
     fig.savefig("../Sample/hierarchy.svg", transparent=True, bbox_inches='tight', pad_inches=0)
-    fig.savefig('../Sample/hierarchy.eps', format='eps', dpi=1000)
+    # fig.savefig('../Sample/hierarchy.eps', format='eps', dpi=1000)
     #plt.show()
 
 
@@ -79,8 +79,15 @@ def draw_emp_no_name(emp_no, emp, new_rec, ax):
     ctext_y = ry + new_rec.get_height() / 4.0
     emp_name = emp.get_name()
     # print(emp_no, rx, ry)
-    ax.annotate(emp_no, (cx, cy), color='w', fontsize=8, ha='center', va='center')
-    ax.annotate(emp_name, (cx, ctext_y), color='w', fontsize=5, ha='center', va='center')
+    color_str = 'w'
+    if emp.is_termed():
+        color_str = 'red'
+    try:
+        ax.annotate(emp_no, (cx, cy), color=color_str, fontsize=8, ha='center', va='center')
+        ax.annotate(emp_name, (cx, ctext_y), color=color_str, fontsize=5, ha='center', va='center')
+    except UnicodeDecodeError:
+        # print("Either %s or %s has decoding issue" % (emp_no,emp_name))
+        raise ValueError("Data decoding issue! with %s or %s" % (emp_no, emp_name))
 
 
 def draw_line(parent_emp_no, parent_emp, parent_rec, new_h, position, fig, ax):
@@ -129,9 +136,13 @@ def main():
     # width, depth = new_h.get_depth_width()
     # print("Width:%d, \tDepth:%d\n" % (width, depth))
 
-    test_str1 = r"/Users/desheng/builds/commission-analytics/Sample/FY16Q3"
+    test_str1 = r"/Users/desheng/builds/commission-analytics/Sample/FY16Q4"
 
     ca_session = casession.CASession(test_str1)
+    ca_session.get_hierarchy().validate_emp_list()
+    # position = ca_session.get_hierarchy().generate_position()
+    # print(position)
+    #illustrate(ca_session.get_hierarchy(), position)
     # print(ca_session.get_hierarchy())
 
     ca_session.clean_bookings()
@@ -140,18 +151,25 @@ def main():
 
     ca_utility.pivot_SFDC_files(ca_session)
     # print(ca_session.get_pivot_SFDC_filelist())
+
     ca_utility.clean_GEO_forecast(ca_session)
     ca_utility.build_sales_manager_map(ca_session)
     # print(ca_utility.get_unique_saleslist(ca_session))
     ca_utility.filter_booking_SFDC(ca_session)
-    ca_utility.summary_filtered_pivot_SFDC(ca_session)
-    ca_utility.merge_SFDC_summary_with_manager(ca_session)
-    ca_utility.merge_summary_filtered_booking(ca_session)
+    ca_utility.summary_filtered_pivot_SFDC(ca_session)  # 01-
+    ca_utility.merge_SFDC_summary_with_manager(ca_session)  # 05, 10, 15
+    ca_utility.merge_summary_filtered_booking(ca_session)  # 20
     ca_utility.allocate_remaining_GEO(ca_session)
-    # position = ca_session.get_hierarchy().generate_position()
-    # print(position)
-    #illustrate(ca_session.get_hierarchy(), position)
 
+    # combine allocated ACV/PERB with original SFDC data to sales level
+    # be careful, this will not be a filtered SFDC based on unique sales list
+    # since we have to consider that a manager may have direct sales opportunity associated.
+    ca_utility.combine_SFDC_allocation(ca_session)
+    ca_utility.roll_up_SFDC_GEO(ca_session)
+    '''
+    #print(ca_session.get_hierarchy().get_emp_list())
+
+    '''
 
 if __name__ == "__main__":
     main()

@@ -3,18 +3,26 @@ import sys
 
 class Salesman:
     # initialize name, ID number, city
-    def __init__(self, emp_no, emp_name):
+    def __init__(self, emp_no, emp_name, term=None):
         self.__emp_no = emp_no
         self.__emp_name = emp_name
         self.__reporters = []
         self.__boss = []
         self.__is_overlay = False
+        self.__is_termed = False
+        if term:
+            term_str = term.upper().strip()
+            if term_str == "TRUE" or term_str == "TERM":
+                self.__is_termed = True
 
     def get_emp_no(self):
         return self.__emp_no
 
     def is_manager(self):
         return len(self.__reporters) > 0
+
+    def is_termed(self):
+        return self.__is_termed
 
     def get_name(self):
         return self.__emp_name
@@ -68,7 +76,8 @@ class Salesman:
         name_string = '*'
         name_string += '*'.join(self.__boss)
         name_string += "->" + self.__emp_no + ":" + self.__emp_name + "->[" + ":".join(self.__reporters) + "]"
-
+        if self.__is_termed:
+            name_string += " Termed"
         return name_string
 
 
