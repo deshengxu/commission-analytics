@@ -447,7 +447,7 @@ def main():
         print("can't find top boss!\n")
 
     for emp_no, sales in new_h.get_emp_list().iteritems():
-        print emp_no, "\t", sales
+        print("EMP:%s\t%s" % (emp_no, sales))
 
     # width, depth = new_h.get_depth_width()
     # print("Width:%d, \tDepth:%d\n" % (width, depth))

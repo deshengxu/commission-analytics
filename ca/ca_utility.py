@@ -1,7 +1,11 @@
 import os
 import sys
 import csv
-import ConfigParser
+
+try:
+    import ConfigParser
+except:
+    import configparser
 import pandas as pd
 import numpy as np
 
@@ -10,7 +14,7 @@ sys.path.append(".")
 try:
     from . import casession
 except:
-    import casession
+    from ca import casession
 
 
 def roll_up_SFDC_GEO(ca_session):
@@ -208,7 +212,10 @@ def allocate_remaining_GEO(ca_session):
                 rest_key_df.drop(col, axis=1, inplace=True)
 
         # only keep numbers > 0
-        rest_key_df[key + "_REST"] = rest_key_df[key.upper()].map(lambda x: 0 if x < 0 else x)
+        # rest_key_df[key + "_REST"] = rest_key_df[key.upper()].map(lambda x: 0 if x < 0 else x)
+        # 20160801 change policy: now copy all REST, no matter big than 0 or less than 0.
+        # if it is lower than 0, it also needs to be allocated.
+        rest_key_df[key + "_REST"] = rest_key_df[key.upper()]
         rest_key_df.drop(key.upper(), axis=1, inplace=True)
         rest_geo_dict[key] = rest_key_df
         # print(rest_key_df)

@@ -1,7 +1,4 @@
 import sys
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatch
-import matplotlib.lines as lines
 
 sys.path.append(".")
 
