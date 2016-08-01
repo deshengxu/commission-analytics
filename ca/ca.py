@@ -31,7 +31,13 @@ def main():
     # test_str1 = r"/Users/desheng/builds/commission-analytics/Sample/FY16Q4"
 
     # ca_session = casession.CASession(test_str1)
-    ca_session = casession.CASession(".")
+    # print(sys.argv)
+    # print("Length:%d" % len(sys.argv))
+    currentPath = "."
+    if len(sys.argv) > 1:
+        currentPath = sys.argv[1]
+
+    ca_session = casession.CASession(currentPath)
     ca_session.get_hierarchy().validate_emp_list()
     position = ca_session.get_hierarchy().generate_position()
     # print(position)

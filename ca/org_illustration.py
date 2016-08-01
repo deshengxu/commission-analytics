@@ -69,10 +69,10 @@ def illustrate(new_hierarchy, position, imafile="../Sample/hierarchy.svg"):
 
     DPI = fig.get_dpi()
     fig.set_size_inches(max_x / (320 / DPI), max_y / (320 / DPI), forward=True)
-    print "DPI:", DPI
+    print("DPI:%f" % DPI)
     DefaultSize = fig.get_size_inches()
-    print "Default size in Inches", DefaultSize
-    print "Which should result in a %i x %i Image" % (DPI * DefaultSize[0], DPI * DefaultSize[1])
+    print("Default size in Inches %.1f:%.1f" % (DefaultSize[0], DefaultSize[1]))
+    print("Which should result in a %i x %i Image" % (DPI * DefaultSize[0], DPI * DefaultSize[1]))
 
     # fig.savefig("../Sample/hierarchy.png", dpi=300)
     # fig.set_size_inches(max_x,max_y)
