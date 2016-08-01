@@ -2,7 +2,10 @@
 
 # ...
 
-from distutils.core import setup
+try:
+    from setuptools import setup
+except ImportError:
+    from distutils.core import setup
 from ca import __version__
 
 setup(name='ca.py',
@@ -17,4 +20,5 @@ setup(name='ca.py',
       long_description="A python tool for commission what-if analysis.",
       license="Public domain",
       platforms=["any"],
+      install_requires=['matplotlib','pandas'],
       )
