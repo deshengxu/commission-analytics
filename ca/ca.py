@@ -19,26 +19,15 @@ except:
 
 
 def main():
-    # new_h = build_hierarchy_from_sample()
-    # new_h = hierarchy.build_hierarchy_from_csv('../Sample/FY16Q3/FY16Q3-Hierarchy.csv')
-
-    # width, depth = new_h.get_depth_width()
-    # print("Width:%d, \tDepth:%d\n" % (width, depth))
-
-    # test_str1 = r"/Users/desheng/builds/commission-analytics/Sample/FY16Q4"
-
-    # ca_session = casession.CASession(test_str1)
-    # print(sys.argv)
-    # print("Length:%d" % len(sys.argv))
     currentPath = "."
     if len(sys.argv) > 1:
         currentPath = sys.argv[1]
 
     ca_session = casession.CASession(currentPath)
     ca_session.get_hierarchy().validate_emp_list()
-    position = ca_session.get_hierarchy().generate_position()
+    # position = ca_session.get_hierarchy().generate_position()
     # print(position)
-    org_illustration.illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
+    #org_illustration.illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
     # print(ca_session.get_hierarchy())
     ca_session.clean_bookings()
     ca_utility.clean_SFDC_files(ca_session)
@@ -54,13 +43,33 @@ def main():
     ca_utility.summary_filtered_pivot_SFDC(ca_session)  # 01-
     ca_utility.merge_SFDC_summary_with_manager(ca_session)  # 05, 10, 15
     ca_utility.merge_summary_filtered_booking(ca_session)  # 20
-    ca_utility.allocate_remaining_GEO(ca_session)
 
-    # combine allocated ACV/PERB with original SFDC data to sales level
-    # be careful, this will not be a filtered SFDC based on unique sales list
-    # since we have to consider that a manager may have direct sales opportunity associated.
-    ca_utility.combine_SFDC_allocation(ca_session)
-    ca_utility.roll_up_SFDC_GEO(ca_session)
+    # allocation algorithm is: after deduction of existing SFDC, allocated by percentage of remaining
+    # Non-bigdeal size.
+    # if all sales rep has 0 in non-big deal numbers, it will be spread out equally.
+    print("\n\nStart to allocate based on regular algorithm...")
+    ca_utility.allocate_remaining_GEO_regular(ca_session)
+    ca_utility.combine_SFDC_allocation(ca_session, "regular")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "regular")
+    print("Done!\n\n\n")
+
+    print("Start to allocate based on verylow algorithm...")
+    ca_utility.allocate_remaining_GEO_extreme(ca_session, "verylow")
+    ca_utility.combine_SFDC_allocation(ca_session, "verylow")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "verylow")
+    print("Done!\n\n\n")
+
+    print("Start to allocate based on lowest algorithm...")
+    ca_utility.allocate_remaining_GEO_extreme(ca_session, "lowest")
+    ca_utility.combine_SFDC_allocation(ca_session, "lowest")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "lowest")
+    print("Done!\n\n\n")
+
+    print("Start to allocate based on highest algorithm...")
+    ca_utility.allocate_remaining_GEO_extreme(ca_session, "highest")
+    ca_utility.combine_SFDC_allocation(ca_session, "highest")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
+    print("Done!")
     '''
 
     #print(ca_session.get_hierarchy().get_emp_list())

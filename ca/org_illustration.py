@@ -92,6 +92,8 @@ def draw_emp_no_name(emp_no, emp, new_rec, ax):
     if emp.is_termed():
         color_str = 'red'
     try:
+        # emp_no = unicode(emp_no, errors='replace')
+        emp_name = unicode(emp_name, errors='replace')
         ax.annotate(emp_no, (cx, cy), color=color_str, fontsize=8, ha='center', va='center')
         ax.annotate(emp_name, (cx, ctext_y), color=color_str, fontsize=5, ha='center', va='center')
     except UnicodeDecodeError:
@@ -131,7 +133,7 @@ def draw_line(parent_emp_no, parent_emp, parent_rec, new_h, position, fig, ax):
         # draw end
         child_salesman = new_h.get_emp_list().get(child_emp_no, None)
         if not child_salesman:
-            raise ValueError("Can't child salesman in draw_line()")
+            raise ValueError("Can't find child salesman in draw_line()")
 
         draw_line(child_emp_no, child_salesman, child_rec, new_h, position, fig, ax)
 
@@ -152,33 +154,7 @@ def main():
     position = ca_session.get_hierarchy().generate_position()
     # print(position)
     illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
-    # print(ca_session.get_hierarchy())
-    ca_session.clean_bookings()
-    ca_utility.clean_SFDC_files(ca_session)
-    # print(ca_session.get_cleaned_SFDC_filelist())
 
-    ca_utility.pivot_SFDC_files(ca_session)
-    # print(ca_session.get_pivot_SFDC_filelist())
-
-    ca_utility.clean_GEO_forecast(ca_session)
-    ca_utility.build_sales_manager_map(ca_session)
-    # print(ca_utility.get_unique_saleslist(ca_session))
-    ca_utility.filter_booking_SFDC(ca_session)
-    ca_utility.summary_filtered_pivot_SFDC(ca_session)  # 01-
-    ca_utility.merge_SFDC_summary_with_manager(ca_session)  # 05, 10, 15
-    ca_utility.merge_summary_filtered_booking(ca_session)  # 20
-    ca_utility.allocate_remaining_GEO(ca_session)
-
-    # combine allocated ACV/PERB with original SFDC data to sales level
-    # be careful, this will not be a filtered SFDC based on unique sales list
-    # since we have to consider that a manager may have direct sales opportunity associated.
-    ca_utility.combine_SFDC_allocation(ca_session)
-    ca_utility.roll_up_SFDC_GEO(ca_session)
-    '''
-
-    #print(ca_session.get_hierarchy().get_emp_list())
-
-    '''
 
 if __name__ == "__main__":
     main()

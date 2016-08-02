@@ -85,24 +85,24 @@ class CASession:
 
         return self.__all_managers
 
-    def get_manager_rollup_filename(self):
+    def get_manager_rollup_filename(self, algorithm_key):
         return os.path.join(
-            self.__processing_folder, "40-Manager-Rollup.csv"
+            self.__processing_folder, "40-Manager-" + algorithm_key + "-Rollup.csv"
         )
 
-    def get_combined_sfdc_allocation_filename(self):
+    def get_combined_sfdc_allocation_filename(self, algorithm_key):
         return os.path.join(
-            self.__processing_folder, "35-SFDC-GEO-Allocation.csv"
+            self.__processing_folder, "35-SFDC-GEO-" + algorithm_key + "-Allocation.csv"
         )
 
-    def get_split_key_filename(self, key):
+    def get_split_key_filename(self, key, algorithm_key):
         return os.path.join(
-            self.__processing_folder, "30-" + key + "-Allocation.csv"
+            self.__processing_folder, "30-" + key + "-" + algorithm_key + "-Allocation.csv"
         )
 
-    def get_allocation_step1_filename(self):
+    def get_allocation_step1_filename(self, algorithm_key):
         self.__allocation_step1_filename = os.path.join(
-            self.__processing_folder, "25-Allocation.csv"
+            self.__processing_folder, "25-" + algorithm_key + "Allocation.csv"
         )
         return self.__allocation_step1_filename
 

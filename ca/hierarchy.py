@@ -312,11 +312,17 @@ class Hierarchy:
                     #print(emp)
                     if not current_boss_list[0] in issue_no_list:
                         issue_no_list.append(current_boss_list[0])
+            try:
+                emp_no_int = int(emp_no)
+            except:
+                print("Employee No:%s is not an integer number!" % emp_no)
+                issue_no_list.append(emp_no)
 
         if len(issue_no_list) > 0:
             print("\n\nSummary of missing info sales or manager:")
             print(issue_no_list)
             print("\n\n")
+            raise ValueError("Hierarchy has issue, please resolve it before continue!")
         else:
             print("No issue found in hierarchy data!")
 

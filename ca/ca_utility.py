@@ -7,25 +7,27 @@ try:
 except:
     import configparser
 import pandas as pd
-import numpy as np
 
 sys.path.append(".")
 
 try:
     from . import casession
+    from . import algorithm
 except:
-    from ca import casession
+    import casession
+    import algorithm
 
 
-def roll_up_SFDC_GEO(ca_session):
+def roll_up_SFDC_GEO(ca_session, algorithm_key):
     # after combine_SFDC_allocation, roll up all managers numbers.
     # Step 1, pickup a manager from GEO List.
     # Step 2, get all his reporters down to lowest level sales rep and sum all SFDC numbers.
     # Step 3, Done.
     # Key points: each managers will sum numbers from all reporters, including low level manager
     # and lowest level sales.
+    # algorithm_key="regular"
     all_managers = build_all_managers_list(ca_session)
-    allocated_file = ca_session.get_combined_sfdc_allocation_filename()
+    allocated_file = ca_session.get_combined_sfdc_allocation_filename(algorithm_key)
     allocated_df = pd.read_csv(allocated_file, index_col='EMPLOYEE NO')
     allocated_df.drop('INACTIVE', axis=1, inplace=True)
     allocated_df.drop('ISMANAGER', axis=1, inplace=True)
@@ -47,13 +49,13 @@ def roll_up_SFDC_GEO(ca_session):
     cleaned_geo_df = pd.read_csv(cleaned_geo_file, index_col='EMPLOYEE NO')
     roll_up_df = pd.merge(roll_up_df, cleaned_geo_df, left_index=True,
                           right_index=True, suffixes=('', '_PLAN'), how='outer')
-    roll_up_df.to_csv(ca_session.get_manager_rollup_filename())
+    roll_up_df.to_csv(ca_session.get_manager_rollup_filename(algorithm_key))
     # print(roll_up_df)
     # print(all_managers)
     return
 
 
-def combine_SFDC_allocation(ca_session):
+def combine_SFDC_allocation(ca_session, algorithm_key):
     # this combination should based all available sales and manager from GEO.
     # sales manager will be traced back to top level.
     # this change is due to the reason that a manager may have opportunity in SFDC!!!
@@ -62,6 +64,7 @@ def combine_SFDC_allocation(ca_session):
     # Step 3, merge bigdeal from pivot SFDC
     # Step 4, merge with allocated GEO
     # Done
+    #algorithm_key="regular"
     csvfile = ca_session.get_sales_manager_mapping_filename()
     emp_df = pd.read_csv(csvfile, index_col='EMPLOYEE NO')
     emp_df.drop('MANAGER', axis=1, inplace=True)
@@ -89,7 +92,7 @@ def combine_SFDC_allocation(ca_session):
 
     config_dict = getGeneralConfigurationDict("SFDC Summary Rule", ca_session.get_configuration_file())
     for key in config_dict.keys():
-        key_split_file = ca_session.get_split_key_filename(key)
+        key_split_file = ca_session.get_split_key_filename(key, algorithm_key)
         key_df = pd.read_csv(key_split_file, index_col='EMPLOYEE NO')
         col_tobedeleted = []
         for col in key_df.columns:
@@ -102,7 +105,7 @@ def combine_SFDC_allocation(ca_session):
 
     pivot_sfdc_df = pivot_sfdc_df.fillna(0)
 
-    pivot_sfdc_df.to_csv(ca_session.get_combined_sfdc_allocation_filename())
+    pivot_sfdc_df.to_csv(ca_session.get_combined_sfdc_allocation_filename(algorithm_key))
 
     # print(pivot_sfdc_df)
     # saleslist = pd.Series(df['EMPLOYEE NO']).unique()
@@ -111,7 +114,6 @@ def combine_SFDC_allocation(ca_session):
     # print(unique_sales_managers)
 
     return
-
 
 def build_all_managers_list(ca_session):
     '''
@@ -126,7 +128,8 @@ def build_all_managers_list(ca_session):
 
     return all_managers
 
-def allocate_remaining_GEO(ca_session):
+
+def allocate_remaining_GEO_regular(ca_session):
     '''
     allocate SFDC summary from GEO after big deal reduction.
     have to be careful for a stiuation that a up level manager who has many low level managers but also
@@ -135,7 +138,7 @@ def allocate_remaining_GEO(ca_session):
     :param ca_session:
     :return:
     '''
-
+    algorithm_key = "regular"
     # step 1, get all non-big deal SFDC (from file Pivot-FY6Q3-SFDC.csv)
     # Step 2, filtered by Eligible List
     # Step 3, summary posivie numbers by manager in Step 1 and calculate percentage
@@ -149,7 +152,7 @@ def allocate_remaining_GEO(ca_session):
 
     #print(ca_session.get_default_pivot_SFDC_file())
 
-    allocation_step1_sfdc = ca_session.get_allocation_step1_filename()
+    allocation_step1_sfdc = ca_session.get_allocation_step1_filename(algorithm_key)
 
     filtered_pivot = ca_session.get_default_filterd_pivot_SFDC_file()
     # get default filtered_pivot_SFDC, not file list.
@@ -173,6 +176,7 @@ def allocate_remaining_GEO(ca_session):
 
     merged_sfdc_sum_manager_df = pd.read_csv(ca_session.get_05_merged_SFDC_sum_file(),
                                              index_col=["EMPLOYEE NO"])
+    #print(merged_sfdc_sum_manager_df)
     merged_sfdc_sum_manager_df = merged_sfdc_sum_manager_df[
         merged_sfdc_sum_manager_df['BIG DEAL'] != 'YES'
         ]
@@ -260,7 +264,7 @@ def allocate_remaining_GEO(ca_session):
         # step2_total_key = key+"_STEP2TOTAL"
         # key_df[step2_total_key] = key_df[allocated_key] + key_df[nonbigdeal_key]
 
-        key_file = ca_session.get_split_key_filename(key)
+        key_file = ca_session.get_split_key_filename(key, algorithm_key)
         key_df.to_csv(key_file)
 
     #print(eligible_df)
@@ -270,6 +274,167 @@ def allocate_remaining_GEO(ca_session):
 
     return
 
+
+def allocate_remaining_GEO_extreme(ca_session, algorithm_key):
+    '''
+    allocate SFDC summary from GEO after big deal reduction.
+    have to be careful for a stiuation that a up level manager who has many low level managers but also
+    has individual direct sales rep in GEO forecast.
+    this has to be avoided from GEO forecast check.
+    :param ca_session:
+    :return:
+    '''
+    # algorithm_key = "verylow"
+    # step 1, get all non-big deal SFDC (from file Pivot-FY6Q3-SFDC.csv)
+    # Step 2, filtered by Eligible List
+    # Step 3, summary posivie numbers by manager in Step 1 and calculate percentage
+    # Step 4, Split 15-Merged-GEO-SFDC-BigDeal based on percentage.
+
+    # Step 1, beginning code is copied from summary_filtered_pivot_SFDC()
+    # but changed criteria from "YES" to NO.
+    # and changed from file list to default SFDC pivoted file.
+    config_dict = getGeneralConfigurationDict("SFDC Summary Rule", ca_session.get_configuration_file())
+    # get summary title list.
+
+    # print(ca_session.get_default_pivot_SFDC_file())
+
+    allocation_step1_sfdc = ca_session.get_allocation_step1_filename(algorithm_key)
+
+    filtered_pivot = ca_session.get_default_filterd_pivot_SFDC_file()
+    # get default filtered_pivot_SFDC, not file list.
+    filtered_df = pd.read_csv(filtered_pivot, index_col=['EMPLOYEE NO', 'BIG DEAL'])
+    filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'NO']
+    unique_sales_list = sorted(list(get_unique_saleslist(ca_session)))
+    filtered_df = filtered_df[filtered_df.index.get_level_values('EMPLOYEE NO').isin(unique_sales_list)]
+
+    for key, column_list in config_dict.iteritems():
+        filtered_df[(key.upper() + "_NONBIGDEAL")] = filtered_df[column_list].sum(axis=1)
+        filtered_df = filtered_df.drop(column_list, axis=1)
+
+    for col in filtered_df.columns:
+        if "TOTAL" in col:
+            filtered_df.drop(col, axis=1, inplace=True)
+
+    # 20160731 added to filter only active sales
+    filtered_df.reset_index(level=1, drop=True, inplace=True)
+    # till now, only 3 columns left, EMPLOYEE NO, ACV-NONBIGDEAL_NONBIGDEAL, PERB-NONBIGDEAL_NONBIGDEAL
+    # print(filtered_df)
+
+    merged_sfdc_sum_manager_df = pd.read_csv(ca_session.get_05_merged_SFDC_sum_file(),
+                                             index_col=["EMPLOYEE NO"])
+    # print(merged_sfdc_sum_manager_df)
+    merged_sfdc_sum_manager_df = merged_sfdc_sum_manager_df[
+        merged_sfdc_sum_manager_df['BIG DEAL'] != 'YES'
+        ]
+    # print(merged_sfdc_sum_manager_df)
+    allowed_columns = []
+    # for key in config_dict.keys():
+    #    allowed_columns.append(key.upper()) # add ACV, PERB
+    allowed_columns.append("MANAGER")
+
+    for col in merged_sfdc_sum_manager_df.columns:
+        if not col in allowed_columns:
+            merged_sfdc_sum_manager_df.drop(col, axis=1, inplace=True)
+
+    merged_sfdc_sum_manager_df.sort_index(inplace=True)
+    merged_sfdc_sum_manager_df = merged_sfdc_sum_manager_df.fillna(0)
+    # print(merged_sfdc_sum_manager_df)
+    # filtered_df = filtered_df.join(merged_sfdc_sum_manager_df)
+    filtered_df = pd.merge(filtered_df, merged_sfdc_sum_manager_df,
+                           left_index=True, right_index=True)
+    # print(filtered_df)
+    # merge with eligible list
+    eligible_df = pd.read_csv(ca_session.get_20_booking_eligible_list_file(), index_col="EMPLOYEE NO")
+    eligible_df.sort_index(inplace=True)
+
+    filtered_df = filtered_df.join(eligible_df, lsuffix="", rsuffix="_BOOKINGTOTAL", how='left')
+    allowed_keys = []
+    for key in config_dict.keys():
+        allowed_keys.append(key.upper())  # only ACV, PERB etc.
+
+    # read GEO forecast (deducted all existing) for allocation
+    rest_geo_df = pd.read_csv(ca_session.get_15_merged_GEO_SFDC_sum_file(), index_col="EMPLOYEE NO")
+    rest_geo_dict = {}
+    for key in allowed_keys:
+        rest_key_df = rest_geo_df.copy()
+        for col in rest_key_df.columns:
+            if col != key.upper():
+                rest_key_df.drop(col, axis=1, inplace=True)
+
+        # only keep numbers > 0
+        # rest_key_df[key + "_REST"] = rest_key_df[key.upper()].map(lambda x: 0 if x < 0 else x)
+        # 20160801 change policy: now copy all REST, no matter big than 0 or less than 0.
+        # if it is lower than 0, it also needs to be allocated.
+        rest_key_df[key + "_REST"] = rest_key_df[key.upper()]
+        rest_key_df.drop(key.upper(), axis=1, inplace=True)
+        rest_geo_dict[key] = rest_key_df
+        # print(rest_key_df)
+
+    for key in allowed_keys:
+        key_df = filtered_df.copy()
+        for col in key_df.columns:
+            if (not col == "MANAGER") and (not col.startswith(key)):
+                key_df.drop(col, axis=1, inplace=True)
+        eligible_key = key + "_ELIGIBLE"
+        key_df = key_df[key_df[eligible_key] != False]
+        # need one more step to remove inactive sales from this list after big deal calculation.
+
+        nonbigdeal_key = key + "_NONBIGDEAL"
+        rest_geo_key = key + "_REST"
+        allocated_key = key + "_ALLOCATED"
+
+        manager_list = sorted(list(pd.Series(key_df['MANAGER']).unique()))
+        rest_geo_df = rest_geo_dict.get(key.upper(), None)
+
+        # print(rest_geo_df)
+        for manager in manager_list:
+            manager_df = key_df[key_df['MANAGER'] == manager]
+            sales_dict = manager_df[nonbigdeal_key].to_dict()
+            # print(sales_dict)
+            rest_number = rest_geo_df.loc[manager][rest_geo_key]
+            # print("%d-->%10.2f" % (manager,rest_number))
+            new_dict = algorithm.allocation(sales_dict, rest_number, algorithm_key)
+
+            for sales, allocated_value in new_dict.iteritems():
+                key_df.loc[sales, allocated_key] = allocated_value
+
+        '''
+        key_mgr_series = key_df.groupby('MANAGER')[nonbigdeal_key].sum()
+        nonbigdeal_sum_key = nonbigdeal_key + "_SUM"
+        key_mgr_series.name = nonbigdeal_sum_key
+
+        nonbigdeal_ratio_key = nonbigdeal_key + "_PER"
+        key_mgr_df = key_mgr_series.to_frame()
+
+        # key_mgr_df = pd.pivot_table(key_df, index='MANAGER', values=[nonbigdeal_key], fill_value=0)
+
+        key_df = pd.merge(key_df, key_mgr_df, left_on="MANAGER", suffixes=('', '_MGR'), right_index=True)
+        key_df[nonbigdeal_ratio_key] = key_df[nonbigdeal_key] / key_df[nonbigdeal_sum_key]
+
+        zero_key_df = key_df[key_df[nonbigdeal_sum_key] == 0.0]
+        zero_mgr_df = zero_key_df.groupby('MANAGER')[nonbigdeal_sum_key].agg(['count'])
+        # print(zero_mgr_df)
+        for index, row in zero_mgr_df.iterrows():
+            # print index, row['count']
+            key_df.loc[key_df['MANAGER'] == index, nonbigdeal_ratio_key] = 1.0 / (float(row['count']))
+        # print(zero_mgr_df.columns)
+        # combine rest of GEO
+        rest_geo_df = rest_geo_dict.get(key.upper(), None)
+        key_df = pd.merge(key_df, rest_geo_df, left_on="MANAGER", right_index=True)
+        # calculate allocation
+        rest_geo_key = key + "_REST"
+        allocated_key = key + "_ALLOCATED"
+        key_df[allocated_key] = key_df[rest_geo_key] * key_df[nonbigdeal_ratio_key]
+        '''
+
+        key_file = ca_session.get_split_key_filename(key, algorithm_key)
+        key_df.to_csv(key_file)
+
+    # print(eligible_df)
+
+    filtered_df.to_csv(allocation_step1_sfdc)
+
+    return
 
 def get_key_from_filename(filename, ca_session):
     index_key = "FY%2dQ" % ca_session.get_year()
@@ -445,7 +610,7 @@ def filter_booking_SFDC(ca_session):
     saleslist = pd.Series(df['EMPLOYEE NO']).unique()
 
     unique_sales_list = sorted(list(saleslist))
-
+    #print(unique_sales_list)
     # when filter SFDC, all managers and inactive record will be kept.
     # filter SFDC opporunity based on unique sales list.
     sfdc_files = ca_session.get_cleaned_SFDC_filelist()
