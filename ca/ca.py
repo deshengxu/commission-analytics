@@ -25,9 +25,9 @@ def main():
 
     ca_session = casession.CASession(currentPath)
     ca_session.get_hierarchy().validate_emp_list()
-    # position = ca_session.get_hierarchy().generate_position()
+    position = ca_session.get_hierarchy().generate_position()
     # print(position)
-    #org_illustration.illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
+    org_illustration.illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
     # print(ca_session.get_hierarchy())
     ca_session.clean_bookings()
     ca_utility.clean_SFDC_files(ca_session)
@@ -48,7 +48,8 @@ def main():
     # Non-bigdeal size.
     # if all sales rep has 0 in non-big deal numbers, it will be spread out equally.
     print("\n\nStart to allocate based on regular algorithm...")
-    ca_utility.allocate_remaining_GEO_regular(ca_session)
+    # ca_utility.allocate_remaining_GEO_regular(ca_session)
+    ca_utility.allocate_remaining_GEO_extreme(ca_session, "regular")
     ca_utility.combine_SFDC_allocation(ca_session, "regular")
     ca_utility.roll_up_SFDC_GEO(ca_session, "regular")
     print("Done!\n\n\n")
@@ -69,7 +70,7 @@ def main():
     ca_utility.allocate_remaining_GEO_extreme(ca_session, "highest")
     ca_utility.combine_SFDC_allocation(ca_session, "highest")
     ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
-    print("Done!")
+    print("Done!\n")
     '''
 
     #print(ca_session.get_hierarchy().get_emp_list())

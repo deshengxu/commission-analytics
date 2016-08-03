@@ -136,6 +136,39 @@ def lowest_cost(existing_dict, rest):
     return new_dict
 
 
+def regular_cost(existing_dict, rest):
+    if not existing_dict:
+        raise ValueError("Input Dict should not be empty in regular_cost()!")
+
+    total = len(existing_dict)
+    if total == 0:
+        raise ValueError("Input Dict doesn't have any data in it in regular_cost()!")
+
+    sorted_x = sorted(existing_dict.items(), key=operator.itemgetter(1))
+    allocated = [0.0] * total
+
+    if total == 1:
+        allocated[0] += rest
+        new_dict = {}
+        new_dict[sorted_x[0][0]] = allocated[0]
+        return new_dict
+
+    summary = 0.0
+    for index in range(total):
+        summary += sorted_x[index][1]
+
+    new_dict = {}
+    if summary < 0.00001:
+        for index in range(total):
+            allocated[index] = (summary + rest) / (float(total))
+            new_dict[sorted_x[index][0]] = allocated[index]
+    else:
+        for index in range(total):
+            allocated[index] = rest * sorted_x[index][1] / summary
+            new_dict[sorted_x[index][0]] = allocated[index]
+
+    return new_dict
+
 def highest_cost(existing_dict, rest):
     if not existing_dict:
         raise ValueError("Input Dict should not be empty in highest_cost()!")
@@ -192,18 +225,24 @@ def allocation(existing_dic, rest, key):
         return lowest_cost(existing_dic, rest)
     elif key.upper() == "HIGHEST":
         return highest_cost(existing_dic, rest)
+    elif key.upper() == "REGULAR":
+        return regular_cost(existing_dic, rest)
     else:
         raise ValueError("A wrong key %s has been provided in allocation()!" % key)
 
 
 def main():
-    dict = {111: 0.01, 222: 10.0, 333: 89.0, 444: 32}
+    dict = {111: 0.00, 222: 10.0, 333: 89.0, 444: 32}
+    # dict = {111: 0.00, 222: 0.02, 333: 0.0, 444: 0}
+    rest = 100.0
     # dict = {111: 0.01}
     # dict = {}
 
-    new_dict = verylow_cost(dict, 100.0)
+    # new_dict = verylow_cost(dict, 100.0)
     # new_dict = lowest_cost(dict, -100.0)
     # new_dict = highest_cost(dict, -1000.0)
+
+    new_dict = allocation(dict, rest, "regular")
 
     print(dict)
     print(new_dict)

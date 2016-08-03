@@ -298,16 +298,17 @@ class Hierarchy:
 
     def validate_emp_list(self):
         # print(self.__emp_list)
+        print("\nStart to validate hierarchy data...")
         issue_no_list = []
         for emp_no, emp in self.__emp_list.iteritems():
             # print(emp)
             current_boss_list = emp.get_boss()
             if len(current_boss_list) == 0:
-                print("%s may be top boss since it does't have boss!" % emp_no)
+                print("\tEMP_NO:(%s) may be the top boss since it does't have boss!" % emp_no)
             else:
                 existing_boss = self.__emp_list.get(current_boss_list[0], None)  # only pickup first one.
                 if not existing_boss:
-                    print("%s may have data issue since its' boss %s can't be found!" %
+                    print("\tEMP_NO:(%s) may have data issue since it doesn't have boss!" %
                           (emp_no, current_boss_list[0]))
                     #print(emp)
                     if not current_boss_list[0] in issue_no_list:
@@ -315,16 +316,16 @@ class Hierarchy:
             try:
                 emp_no_int = int(emp_no)
             except:
-                print("Employee No:%s is not an integer number!" % emp_no)
+                print("\tEmployee No:%s is not an integer number!" % emp_no)
                 issue_no_list.append(emp_no)
 
         if len(issue_no_list) > 0:
-            print("\n\nSummary of missing info sales or manager:")
+            print("\n\n\tSummary of missing info sales or manager:")
             print(issue_no_list)
             print("\n\n")
             raise ValueError("Hierarchy has issue, please resolve it before continue!")
         else:
-            print("No issue found in hierarchy data!")
+            print("\tNo issue found in hierarchy data!")
 
     def add_salesman(self, new_salesman):
         '''
