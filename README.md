@@ -89,7 +89,7 @@ Sample data will not be shared into repository due to security concern.
     
     8.2) Verification (TBD)
     
-9) Calculation Process (Best Forecast, **in Progress**):
+9) Calculation Process (Regular, **Done**):
     
     9.1) From Geo-Forecast data, query all lowest level sales list.
     
@@ -113,30 +113,19 @@ Sample data will not be shared into repository due to security concern.
     
     9.7) Rule 4: Allocate rest Geo-Forecast to all sales.
     
-    9.8) SFDC Opportunity Calculation Formula:
-    
-    9.8.1) Direct: ACV * 2.7 * Duration Factor * Disco Factor
-    9.8.1.1) if Duration <= 12, Duration =1.1; if <=24, Duration =1.15; else Duration = 1.2
-    9.8.1.2) Disco Factor == ""? "C", Disco Factor. {A:1.2; B:1.1; C:1; D:0.85; F:0.65, Default = "C"}
-    
-    9.8.2) InDirect: ACV * 3.0 * Duration Factor * Disco Factor
-    9.8.1.1) if Duration <= 12, Duration =1.1; if <=24, Duration =1.15; else Duration = 1.2
-    9.8.1.2) Disco Factor == C:1.0 always.
-    
-    9.8.3) Perp: Perp * Disco * (1+ NewSupport Factor)
-    9.8.3.1) Disco Factor == ""? "C", Disco Factor. {A:1.2; B:1.1; C:1; D:0.85; F:0.65, Default = "C"}
-    9.8.3.2) NewSupport Factor will be a seperated table. (Sales: NewSupport Factor in Hierarchy)
-    
-    9.8.4) ACV in Adjustment: ACV * 2.7 * 1.2 * 1.15
-    
-    9.8.5) Perp in Adjustment: Perp * 1.15 * (1+ NewSupport Factor)
-    
+    9.8) Roll up to all level managers
     
     
 10) Calculate Process (Minimal Commission):
+
+    10.1) "Rest" of a manager will be spreaded out to all his lowest level eligible sales equally.
     
 11) Calculate Process (Maximal Commission):
+    11.1) "Rest" will be assigned to "richest" sales.
 
-12) Release at V0.02 without function to support #9.8
+12) Calculate Process (Very Low Commission):
+
+    12.1) "Rest" will be assigned to lowest sales rep first and then next lowest sales rep.
+    
 
     
