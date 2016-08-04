@@ -134,7 +134,13 @@ Sample data will not be shared into repository due to security concern.
     
     
 10) Calculate Process (Minimal Commission):
+    10.1) The "Rest" of each manager's goal will be spreaded out to each eligile sales equally.
     
 11) Calculate Process (Maximal Commission):
+    11.1) The "Rest" of each managers' goal will be assigned to "rich" sales first.
  
+12) Calculate Process (Very Low Commission):
+    12.1) Lowest sales will get numbers from manager
+    
+    12.2) then next lowlest sales.
     
