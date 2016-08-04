@@ -136,5 +136,7 @@ Sample data will not be shared into repository due to security concern.
 10) Calculate Process (Minimal Commission):
     
 11) Calculate Process (Maximal Commission):
- 
+
+12) Release at V0.02 without function to support #9.8
+
     
