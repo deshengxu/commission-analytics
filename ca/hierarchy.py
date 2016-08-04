@@ -309,7 +309,7 @@ class Hierarchy:
                 existing_boss = self.__emp_list.get(current_boss_list[0], None)  # only pickup first one.
                 if not existing_boss:
                     print("\tEMP_NO:(%s) may have data issue since it doesn't have boss!" %
-                          (emp_no, current_boss_list[0]))
+                          (unicode(emp_no, errors='replace')))
                     #print(emp)
                     if not current_boss_list[0] in issue_no_list:
                         issue_no_list.append(current_boss_list[0])
