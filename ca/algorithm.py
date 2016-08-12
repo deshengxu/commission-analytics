@@ -218,7 +218,39 @@ def highest_cost(existing_dict, rest):
     return new_dict
 
 
-def allocation(existing_dic, rest, key):
+def regular_bestguess(nonbigdeal_dict, rest, bigdeal_dict):
+    if not bigdeal_dict:
+        raise ValueError("Big Deal data should be included in best guess!")
+
+    total_sales = len(nonbigdeal_dict)
+    total_dict = {}
+    for key, value in nonbigdeal_dict.iteritems():
+        bigdeal_value = bigdeal_dict.get(key, 0)
+        total_dict[key] = value + bigdeal_value
+
+    if total_sales == 0:
+        raise ValueError("Input Dict doesn't have any data in it in highest_cost()!")
+
+    sorted_x = sorted(total_dict.items(), key=operator.itemgetter(1))
+    allocated = [0.0] * total_sales
+
+    new_dict = {}
+    if total_sales == 1:
+        allocated[0] += rest
+        new_dict[sorted_x[0][0]] = allocated[0]
+        return new_dict
+
+    if rest > 0:
+        # when rest is <=0, then it will not be split at this moment.
+        return new_dict
+    else:
+        for x_index in range(total_sales):
+            new_dict[sorted_x[x_index][0]] = 0.0
+
+    return new_dict
+
+
+def allocation(existing_dic, rest, key, bigdeal_dict=None):
     if key.upper() == "VERYLOW":
         return verylow_cost(existing_dic, rest)
     elif key.upper() == "LOWEST":
@@ -227,6 +259,8 @@ def allocation(existing_dic, rest, key):
         return highest_cost(existing_dic, rest)
     elif key.upper() == "REGULAR":
         return regular_cost(existing_dic, rest)
+    elif key.upper() == "BESTGUESS":
+        return regular_bestguess(existing_dic, rest, bigdeal_dict)
     else:
         raise ValueError("A wrong key %s has been provided in allocation()!" % key)
 

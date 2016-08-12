@@ -275,6 +275,134 @@ def allocate_remaining_GEO_regular(ca_session):
     return
 
 
+def allocate_remaining_GEO(ca_session, algorithm_key):
+    '''
+    20160812 cleaned algorithm, reading current SFDC from refined_pivot_SFDC for both big deal and non-big-deal
+    combine big deal and non-big-deal together
+    reading sales-manager mapping, and assign manager with last record.
+    reading eligible list and drop user who is not eligible based on booking number.
+    manager by manager, get non-big-deal, big-deal DF for each algorithm.
+    :param ca_session:
+    :param algorithm_key:
+    :return:
+    '''
+    config_dict = getGeneralConfigurationDict("SFDC Summary Rule", ca_session.get_configuration_file())
+    # get summary title list.
+
+    allocation_step1_sfdc = ca_session.get_allocation_step1_filename(algorithm_key)
+
+    filtered_pivot = ca_session.get_default_filterd_pivot_SFDC_file()
+    # get default filtered_pivot_SFDC, not file list.
+    filtered_df = pd.read_csv(filtered_pivot, index_col=['EMPLOYEE NO', 'BIG DEAL'])
+    non_bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'NO']
+    bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'YES']
+
+    unique_sales_list = sorted(list(get_unique_saleslist(ca_session)))
+    non_bigdeal_filtered_df = non_bigdeal_filtered_df[
+        non_bigdeal_filtered_df.index.get_level_values('EMPLOYEE NO').isin(unique_sales_list)]
+    bigdeal_filtered_df = bigdeal_filtered_df[
+        bigdeal_filtered_df.index.get_level_values('EMPLOYEE NO').isin(unique_sales_list)]
+
+    for key, column_list in config_dict.iteritems():
+        non_bigdeal_filtered_df[(key.upper() + "_NONBIGDEAL")] = non_bigdeal_filtered_df[column_list].sum(axis=1)
+        non_bigdeal_filtered_df = non_bigdeal_filtered_df.drop(column_list, axis=1)
+
+        bigdeal_filtered_df[(key.upper() + "_BIGDEAL")] = bigdeal_filtered_df[column_list].sum(axis=1)
+        bigdeal_filtered_df = bigdeal_filtered_df.drop(column_list, axis=1)
+
+    for col in filtered_df.columns:
+        if "TOTAL" in col:
+            bigdeal_filtered_df.drop(col, axis=1, inplace=True)
+            non_bigdeal_filtered_df.drop(col, axis=1, inplace=True)
+
+    bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
+    non_bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
+
+    filtered_df = pd.merge(bigdeal_filtered_df, non_bigdeal_filtered_df, left_index=True,
+                           right_index=True, how='outer')
+    filtered_df.fillna(0, inplace=True)
+    # now 5 columns left, Employee No, ACV-Nonbigdeal, Perb-Nonbigdeal, ACV-Bigdeal, Perb-Bigdeal
+
+    # start to get sales-manager relationship
+    mapped_file = ca_session.get_sales_manager_mapping_file()
+    sales_mgr_mapping_df = pd.read_csv(mapped_file, index_col=['EMPLOYEE NO', 'LOWESTLEVEL'])
+
+    sales_mgr_mapping_df = sales_mgr_mapping_df[
+        sales_mgr_mapping_df.index.get_level_values('LOWESTLEVEL') == True
+        ]
+
+    sales_mgr_mapping_df = sales_mgr_mapping_df[
+        sales_mgr_mapping_df['INACTIVE'] == False
+        ]
+
+    sales_mgr_mapping_df = sales_mgr_mapping_df[
+        sales_mgr_mapping_df['ISMANAGER'] == False
+        ]
+    sales_mgr_mapping_df.reset_index(level=1, drop=True, inplace=True)
+    sales_mgr_mapping_df.drop(['ISMANAGER', 'INACTIVE'], inplace=True, axis=1)
+
+    # merge data with manager mapping
+    filtered_df = pd.merge(filtered_df, sales_mgr_mapping_df, left_index=True,
+                           right_index=True, how='inner')
+
+    # get ACV, PERB from configuration
+    allowed_keys = []
+    for key in config_dict.keys():
+        allowed_keys.append(key.upper())  # only ACV, PERB etc.
+
+    # read GEO forecast (deducted all existing) for allocation
+    rest_geo_df = pd.read_csv(ca_session.get_15_merged_GEO_SFDC_sum_file(), index_col="EMPLOYEE NO")
+    rest_geo_dict = {}
+    for key in allowed_keys:
+        rest_key_df = rest_geo_df.copy()
+        for col in rest_key_df.columns:
+            if col != key.upper():
+                rest_key_df.drop(col, axis=1, inplace=True)
+
+        # only keep numbers > 0
+        # rest_key_df[key.upper() + "_REST"] = rest_key_df[key.upper()].map(lambda x: 0 if x < 0 else x)
+        # 20160801 change policy: now copy all REST, no matter big than 0 or less than 0.
+        # if it is lower than 0, it also needs to be allocated.
+        rest_key_df[key.upper() + "_REST"] = rest_key_df[key.upper()]
+        rest_key_df.drop(key.upper(), axis=1, inplace=True)
+        rest_geo_dict[key] = rest_key_df
+        # print(rest_key_df)
+
+    for key in allowed_keys:
+        key_df = filtered_df.copy()
+        for col in key_df.columns:
+            if (not col == "MANAGER") and (not col.startswith(key)):
+                key_df.drop(col, axis=1, inplace=True)
+
+        bigdeal_key = key + "_BIGDEAL"
+        nonbigdeal_key = key + "_NONBIGDEAL"
+        rest_geo_key = key + "_REST"
+        allocated_key = key + "_ALLOCATED"
+
+        manager_list = sorted(list(pd.Series(key_df['MANAGER']).unique()))
+        rest_geo_df = rest_geo_dict.get(key.upper(), None)
+
+        # print(rest_geo_df)
+        for manager in manager_list:
+            manager_df = key_df[key_df['MANAGER'] == manager]
+            nonbigdeal_sales_dict = manager_df[nonbigdeal_key].to_dict()
+            bigdeal_sales_dict = manager_df[bigdeal_key].to_dict()
+
+            # print(sales_dict)
+            rest_number = rest_geo_df.loc[manager][rest_geo_key]
+            # print("%d-->%10.2f" % (manager,rest_number))
+            new_dict = algorithm.allocation(nonbigdeal_sales_dict, rest_number, algorithm_key, bigdeal_sales_dict)
+
+            for sales, allocated_value in new_dict.iteritems():
+                key_df.loc[sales, allocated_key] = allocated_value
+
+        key_file = ca_session.get_split_key_filename(key, algorithm_key)
+        key_df.to_csv(key_file)
+
+        # print(eligible_df)
+
+    filtered_df.to_csv(allocation_step1_sfdc)
+
 def allocate_remaining_GEO_extreme(ca_session, algorithm_key):
     '''
     allocate SFDC summary from GEO after big deal reduction.
