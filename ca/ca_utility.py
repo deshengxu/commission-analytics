@@ -321,7 +321,7 @@ def allocate_remaining_GEO_extreme(ca_session, algorithm_key):
     # print(filtered_df)
 
     merged_sfdc_sum_manager_df = pd.read_csv(ca_session.get_05_merged_SFDC_sum_file(),
-                                             index_col=["EMPLOYEE NO"])
+                                             index_col=["EMPLOYEE NO"], dtype=object)
     # print(merged_sfdc_sum_manager_df)
     merged_sfdc_sum_manager_df = merged_sfdc_sum_manager_df[
         merged_sfdc_sum_manager_df['BIG DEAL'] != 'YES'
