@@ -46,7 +46,7 @@ def main():
     # Non-bigdeal size.
     # if all sales rep has 0 in non-big deal numbers, it will be spread out equally.
 
-
+    '''
     print("\n\nStart to allocate based on regular algorithm...")
     # ca_utility.allocate_remaining_GEO_regular(ca_session)
     ca_utility.allocate_remaining_GEO_extreme(ca_session, "regular")
@@ -71,6 +71,25 @@ def main():
     ca_utility.combine_SFDC_allocation(ca_session, "highest")
     ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
     print("Done!\n")
+    '''
+    print("\n\nStart to allocate based on regular algorithm...")
+    ca_utility.allocate_remaining_GEO(ca_session, "regular")
+    ca_utility.combine_SFDC_allocation(ca_session, "regular")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "regular")
+    print("Done!\n\n\n")
+
+    print("Start to allocate based on highest algorithm...")
+    ca_utility.allocate_remaining_GEO(ca_session, "highest")
+    ca_utility.combine_SFDC_allocation(ca_session, "highest")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
+    print("Done!\n")
+
+    print("\n\nStart to allocated based on best guess algorithm...")
+    ca_utility.allocate_remaining_GEO(ca_session, "bestguess")
+    ca_utility.combine_SFDC_allocation(ca_session, "bestguess")
+    ca_utility.roll_up_SFDC_GEO(ca_session, "bestguess")
+    print("Done!\n")
+
 
     #ca_utility.allocate_remaining_GEO(ca_session,"test")
 

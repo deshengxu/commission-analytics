@@ -1,6 +1,7 @@
 import os
 import sys
 import csv
+import pprint
 
 try:
     import ConfigParser
@@ -294,20 +295,28 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
     filtered_pivot = ca_session.get_default_filterd_pivot_SFDC_file()
     # get default filtered_pivot_SFDC, not file list.
     filtered_df = pd.read_csv(filtered_pivot, index_col=['EMPLOYEE NO', 'BIG DEAL'])
-    non_bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'NO']
-    bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'YES']
+
+    non_bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'NO'].copy()
+    bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'YES'].copy()
+    bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
+    non_bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
+    '''
+    # can't remove inactive and manager too earlier since their numbers should be deducted from plan first.
 
     unique_sales_list = sorted(list(get_unique_saleslist(ca_session)))
     non_bigdeal_filtered_df = non_bigdeal_filtered_df[
         non_bigdeal_filtered_df.index.get_level_values('EMPLOYEE NO').isin(unique_sales_list)]
     bigdeal_filtered_df = bigdeal_filtered_df[
         bigdeal_filtered_df.index.get_level_values('EMPLOYEE NO').isin(unique_sales_list)]
+    '''
 
     for key, column_list in config_dict.iteritems():
-        non_bigdeal_filtered_df[(key.upper() + "_NONBIGDEAL")] = non_bigdeal_filtered_df[column_list].sum(axis=1)
+        bigdeal_key = key.upper() + "_BIGDEAL"
+        nonbigdeal_key = key.upper() + "_NONBIGDEAL"
+        non_bigdeal_filtered_df.loc[:, nonbigdeal_key] = non_bigdeal_filtered_df[column_list].sum(axis=1)
         non_bigdeal_filtered_df = non_bigdeal_filtered_df.drop(column_list, axis=1)
 
-        bigdeal_filtered_df[(key.upper() + "_BIGDEAL")] = bigdeal_filtered_df[column_list].sum(axis=1)
+        bigdeal_filtered_df.loc[:, bigdeal_key] = bigdeal_filtered_df[column_list].sum(axis=1)
         bigdeal_filtered_df = bigdeal_filtered_df.drop(column_list, axis=1)
 
     for col in filtered_df.columns:
@@ -315,13 +324,11 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
             bigdeal_filtered_df.drop(col, axis=1, inplace=True)
             non_bigdeal_filtered_df.drop(col, axis=1, inplace=True)
 
-    bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
-    non_bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
-
     filtered_df = pd.merge(bigdeal_filtered_df, non_bigdeal_filtered_df, left_index=True,
                            right_index=True, how='outer')
     filtered_df.fillna(0, inplace=True)
     # now 5 columns left, Employee No, ACV-Nonbigdeal, Perb-Nonbigdeal, ACV-Bigdeal, Perb-Bigdeal
+    # print(filtered_df[filtered_df.index.get_level_values('EMPLOYEE NO') == 51563])
 
     # start to get sales-manager relationship
     mapped_file = ca_session.get_sales_manager_mapping_file()
@@ -329,8 +336,9 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
 
     sales_mgr_mapping_df = sales_mgr_mapping_df[
         sales_mgr_mapping_df.index.get_level_values('LOWESTLEVEL') == True
-        ]
+        ].copy()
 
+    ''' # those lines can't be executed since inactive or manager may have numbers.
     sales_mgr_mapping_df = sales_mgr_mapping_df[
         sales_mgr_mapping_df['INACTIVE'] == False
         ]
@@ -338,13 +346,38 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
     sales_mgr_mapping_df = sales_mgr_mapping_df[
         sales_mgr_mapping_df['ISMANAGER'] == False
         ]
-    sales_mgr_mapping_df.reset_index(level=1, drop=True, inplace=True)
+    '''
+    # Add new column to represent manager or inactive
+    excluesive_key = 'EXCLUDE'
+    sales_mgr_mapping_df[excluesive_key] = False  # default is False
+    sales_mgr_mapping_df.loc[sales_mgr_mapping_df['ISMANAGER'] == True, excluesive_key] = True
+    sales_mgr_mapping_df.loc[sales_mgr_mapping_df['INACTIVE'] == True, excluesive_key] = True
     sales_mgr_mapping_df.drop(['ISMANAGER', 'INACTIVE'], inplace=True, axis=1)
 
+    sales_mgr_mapping_df.reset_index(level=1, drop=True, inplace=True)
+    # print(sales_mgr_mapping_df[sales_mgr_mapping_df['MANAGER'] == 4768])
     # merge data with manager mapping
-    filtered_df = pd.merge(filtered_df, sales_mgr_mapping_df, left_index=True,
-                           right_index=True, how='inner')
+    # filtered_df = pd.merge(filtered_df, sales_mgr_mapping_df, left_index=True,right_index=True, how='inner')
+    filtered_df = pd.merge(filtered_df, sales_mgr_mapping_df, left_index=True, right_index=True, how='outer')
+    filtered_df = filtered_df.fillna(0)
+    # inner will make those sales with 0 in SFDC to be out of allocation.
+    # outer can include those sales with 0 in SFDC to be allocated.
 
+    exclude_df = filtered_df[filtered_df[excluesive_key] == True]  # only those manager and inactive sales
+    exclude_dict = {}
+    for key in config_dict.keys():
+        bigdeal_key = key.upper() + "_BIGDEAL"
+        nonbigdeal_key = key.upper() + "_NONBIGDEAL"
+        key_exclude_df = exclude_df.groupby('MANAGER')[bigdeal_key, nonbigdeal_key].sum()
+        key_exclude_df[key.upper()] = key_exclude_df.sum(axis=1)
+        exclude_dict[key.upper()] = key_exclude_df[key.upper()].to_dict()
+        # print(key_exclude_df)
+    # print(exclude_dict)
+    # print(exclude_df)
+
+    filtered_df = filtered_df[filtered_df[excluesive_key] == False]
+
+    filtered_df.drop([excluesive_key], inplace=True, axis=1)
     # get ACV, PERB from configuration
     allowed_keys = []
     for key in config_dict.keys():
@@ -352,6 +385,7 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
 
     # read GEO forecast (deducted all existing) for allocation
     rest_geo_df = pd.read_csv(ca_session.get_15_merged_GEO_SFDC_sum_file(), index_col="EMPLOYEE NO")
+    '''
     rest_geo_dict = {}
     for key in allowed_keys:
         rest_key_df = rest_geo_df.copy()
@@ -367,22 +401,26 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
         rest_key_df.drop(key.upper(), axis=1, inplace=True)
         rest_geo_dict[key] = rest_key_df
         # print(rest_key_df)
+    '''
 
     for key in allowed_keys:
         key_df = filtered_df.copy()
+        exclude_key_dict = exclude_dict.get(key.upper(), {})
         for col in key_df.columns:
             if (not col == "MANAGER") and (not col.startswith(key)):
                 key_df.drop(col, axis=1, inplace=True)
 
         bigdeal_key = key + "_BIGDEAL"
         nonbigdeal_key = key + "_NONBIGDEAL"
-        rest_geo_key = key + "_REST"
+        # rest_geo_key = key + "_REST"
+        rest_geo_key = key
+        plan_geo_key = key + "_plan"
         allocated_key = key + "_ALLOCATED"
 
         manager_list = sorted(list(pd.Series(key_df['MANAGER']).unique()))
-        rest_geo_df = rest_geo_dict.get(key.upper(), None)
+        #rest_geo_df = rest_geo_dict.get(key.upper(), None)
 
-        # print(rest_geo_df)
+        #print(rest_geo_df)
         for manager in manager_list:
             manager_df = key_df[key_df['MANAGER'] == manager]
             nonbigdeal_sales_dict = manager_df[nonbigdeal_key].to_dict()
@@ -390,8 +428,15 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
 
             # print(sales_dict)
             rest_number = rest_geo_df.loc[manager][rest_geo_key]
+            plan_number = rest_geo_df.loc[manager][plan_geo_key]
+            exclude_number = exclude_key_dict.get(manager, 0.0)
+            # print("Manager:%s\tPlanned:%0.2f\tExclude:%0.2f\tTo be Allocated:%0.2f" %
+            #      (manager, plan_number, exclude_number, plan_number-exclude_number))
+            plan_number = plan_number - exclude_number
+
             # print("%d-->%10.2f" % (manager,rest_number))
-            new_dict = algorithm.allocation(nonbigdeal_sales_dict, rest_number, algorithm_key, bigdeal_sales_dict)
+            new_dict = algorithm.allocation(nonbigdeal_sales_dict, rest_number, algorithm_key,
+                                            bigdeal_sales_dict, plan_number, ca_session)
 
             for sales, allocated_value in new_dict.iteritems():
                 key_df.loc[sales, allocated_key] = allocated_value
@@ -449,7 +494,7 @@ def allocate_remaining_GEO_extreme(ca_session, algorithm_key):
     # print(filtered_df)
 
     merged_sfdc_sum_manager_df = pd.read_csv(ca_session.get_05_merged_SFDC_sum_file(),
-                                             index_col=["EMPLOYEE NO"])
+                                             index_col=["EMPLOYEE NO"], dtype=object)
     # print(merged_sfdc_sum_manager_df)
     merged_sfdc_sum_manager_df = merged_sfdc_sum_manager_df[
         merged_sfdc_sum_manager_df['BIG DEAL'] != 'YES'

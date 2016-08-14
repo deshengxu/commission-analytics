@@ -218,18 +218,19 @@ def highest_cost(existing_dict, rest):
     return new_dict
 
 
-def regular_bestguess(nonbigdeal_dict, rest, bigdeal_dict):
+def regular_bestguess(nonbigdeal_dict, rest, bigdeal_dict, plan_number, ca_session):
     if not bigdeal_dict:
         raise ValueError("Big Deal data should be included in best guess!")
 
     total_sales = len(nonbigdeal_dict)
+    if total_sales == 0:
+        raise ValueError("nonbigdeal_dict doesn't have any sales data in it in regular_bestguess()!")
+
     total_dict = {}
     for key, value in nonbigdeal_dict.iteritems():
         bigdeal_value = bigdeal_dict.get(key, 0)
         total_dict[key] = value + bigdeal_value
 
-    if total_sales == 0:
-        raise ValueError("Input Dict doesn't have any data in it in highest_cost()!")
 
     sorted_x = sorted(total_dict.items(), key=operator.itemgetter(1))
     allocated = [0.0] * total_sales
@@ -238,19 +239,111 @@ def regular_bestguess(nonbigdeal_dict, rest, bigdeal_dict):
     if total_sales == 1:
         allocated[0] += rest
         new_dict[sorted_x[0][0]] = allocated[0]
-        return new_dict
+        # return new_dict
+    elif total_sales == 2:
+        # when only two sales, then:
+        # lowest sales non big deal number will be cut to 0
+        # rest + lowest non big deal number will be assigned to highest person.
+        allocated[0] = (-1) * (nonbigdeal_dict.get(sorted_x[0][0], 0.0))
+        allocated[1] = rest - allocated[0]
+        new_dict[sorted_x[0][0]] = allocated[0]
+        new_dict[sorted_x[1][0]] = allocated[1]
+    elif total_sales == 3:
+        # when only 3 sales, then:
+        # lowest sales non big deal number will be cut to 0
+        # rest + lowest non big deal number will be assigned to highest person.
+        # middle person will be kept
+        allocated[0] = (-1) * (nonbigdeal_dict.get(sorted_x[0][0], 0.0))
+        allocated[2] = rest - allocated[0]
+        new_dict[sorted_x[0][0]] = allocated[0]
+        new_dict[sorted_x[1][0]] = allocated[1]  # 0.0
+        new_dict[sorted_x[2][0]] = allocated[2]
+    elif total_sales == 4:
+        # when only 4 sales, then:
+        # 2 lowest sales non big deal number will be cut to 0
+        # rest + 2 lowest non big deal number will be assigned to highest person.
+        # middle person will be kept
+        allocated[0] = (-1) * (nonbigdeal_dict.get(sorted_x[0][0], 0.0))
+        allocated[1] = (-1) * (nonbigdeal_dict.get(sorted_x[1][0], 0.0))
+        allocated[3] = rest - allocated[0] - allocated[1]
+        new_dict[sorted_x[0][0]] = allocated[0]
+        new_dict[sorted_x[1][0]] = allocated[1]
+        new_dict[sorted_x[2][0]] = allocated[2]  # 0.0
+        new_dict[sorted_x[3][0]] = allocated[3]
+    elif total_sales == 5:
+        # when only 5 sales, then:
+        # 3 lowest sales non big deal number will be cut to 0
+        # rest + 3 lowest non big deal number will be assigned to highest person.
+        # middle person will be kept
+        allocated[0] = (-1) * (nonbigdeal_dict.get(sorted_x[0][0], 0.0))
+        allocated[1] = (-1) * (nonbigdeal_dict.get(sorted_x[1][0], 0.0))
+        allocated[2] = (-1) * (nonbigdeal_dict.get(sorted_x[2][0], 0.0))
 
-    if rest > 0:
-        # when rest is <=0, then it will not be split at this moment.
-        return new_dict
+        allocated[4] = rest - allocated[0] - allocated[1] - allocated[2]
+        new_dict[sorted_x[0][0]] = allocated[0]
+        new_dict[sorted_x[1][0]] = allocated[1]
+        new_dict[sorted_x[2][0]] = allocated[2]  # 0.0
+        new_dict[sorted_x[3][0]] = allocated[3]  # 0.0
+        new_dict[sorted_x[4][0]] = allocated[4]
+    elif 12 >= total_sales > 5:
+        p_sales, p_booking = ca_session.get_band_way1()
+
+        new_dict = allocate_by_segment(sorted_x, p_sales, p_booking, total_sales,
+                                       plan_number)
+
     else:
-        for x_index in range(total_sales):
-            new_dict[sorted_x[x_index][0]] = 0.0
+        p_sales, p_booking = ca_session.get_band_way2()
+
+        new_dict = allocate_by_segment(sorted_x, p_sales, p_booking, total_sales,
+                                       plan_number)
 
     return new_dict
 
 
-def allocation(existing_dic, rest, key, bigdeal_dict=None):
+def allocate_by_segment(sorted_dict, p_sales, p_booking, total_sales, plan_number):
+    segments = len(p_sales)  # how many segments way1 now is 3, way2 now is 4
+    tp = False
+    if total_sales == 15:
+        tp = True
+
+    # if tp: print(sorted_dict, p_sales, p_booking, total_sales, plan_number)
+
+    range_segments = [0] * (segments + 1)
+    for index in range(1, segments):
+        range_segments[index] = range_segments[index - 1] + int(round(p_sales[index - 1] * total_sales, 0))
+    range_segments[segments] = total_sales  # avoid round error
+    # if tp: print(range_segments)
+
+    allocated = [0.0] * total_sales
+    for seg_index in range(segments):
+        sub_total = 0.0
+        for index in range(range_segments[seg_index], range_segments[seg_index + 1]):
+            # assume all SFDC record is positive value
+            if sorted_dict[index][1] < 0.0:
+                raise ValueError("%d has negative SFDC value:%0.2f" % (sorted_dict[index][0], sorted_dict[index][1]))
+            sub_total += sorted_dict[index][1]
+        gap = plan_number * p_booking[seg_index] - sub_total
+
+        # assume sfdc numbers are not negative
+        segment_sales = range_segments[seg_index + 1] - range_segments[seg_index]
+        if segment_sales <= 0:
+            raise ValueError("Sales segment at:%d has %d sales!" % (seg_index + 1, segment_sales))
+
+        if sub_total < 0.001:
+            for index in range(range_segments[seg_index], range_segments[seg_index + 1]):
+                allocated[index] = gap / float(segment_sales)
+        else:
+            for index in range(range_segments[seg_index], range_segments[seg_index + 1]):
+                allocated[index] = gap * sorted_dict[index][1] / sub_total
+
+    new_dict = {}
+    for index in range(total_sales):
+        new_dict[sorted_dict[index][0]] = allocated[index]
+
+    return new_dict
+
+
+def allocation(existing_dic, rest, key, bigdeal_dict=None, plan_number=0.0, ca_session=None):
     if key.upper() == "VERYLOW":
         return verylow_cost(existing_dic, rest)
     elif key.upper() == "LOWEST":
@@ -260,7 +353,7 @@ def allocation(existing_dic, rest, key, bigdeal_dict=None):
     elif key.upper() == "REGULAR":
         return regular_cost(existing_dic, rest)
     elif key.upper() == "BESTGUESS":
-        return regular_bestguess(existing_dic, rest, bigdeal_dict)
+        return regular_bestguess(existing_dic, rest, bigdeal_dict, plan_number, ca_session)
     else:
         raise ValueError("A wrong key %s has been provided in allocation()!" % key)
 

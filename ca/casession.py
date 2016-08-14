@@ -62,6 +62,25 @@ class CASession:
         self.__initialize_default_files()
         self.__init_subfolders()
 
+    def get_band_way1(self):
+        '''
+        return 6-12 first band way, sales portion in 3 segments
+        :return:
+        '''
+        p_sales_proportion = [0.45, 0.40, 0.15]
+        p_booking_proportion = [0.0, 0.50, 0.50]
+        return p_sales_proportion, p_booking_proportion
+
+    def get_band_way2(self):
+        '''
+        return 13+ second band way, sales portion in 4 segments
+        :return:
+        '''
+        p_sales_proportion = [0.45, 0.35, 0.14, 0.06]
+        p_booking_proportion = [0.0, 0.20, 0.40, 0.40]
+        return p_sales_proportion, p_booking_proportion
+
+
     def get_img_filename(self):
         return os.path.join(
             self.__processing_folder, '00-Ora-Chart.svg'
