@@ -28,7 +28,8 @@ def roll_up_SFDC_GEO(ca_session, algorithm_key):
     # and lowest level sales.
     # algorithm_key="regular"
     all_managers = build_all_managers_list(ca_session)
-    allocated_file = ca_session.get_combined_sfdc_allocation_filename(algorithm_key)
+    # allocated_file = ca_session.get_combined_sfdc_allocation_filename(algorithm_key)
+    allocated_file = ca_session.get_booking_result_filename(algorithm_key)
     allocated_df = pd.read_csv(allocated_file, index_col='EMPLOYEE NO')
     allocated_df.drop('INACTIVE', axis=1, inplace=True)
     allocated_df.drop('ISMANAGER', axis=1, inplace=True)
@@ -55,6 +56,137 @@ def roll_up_SFDC_GEO(ca_session, algorithm_key):
     # print(all_managers)
     return
 
+
+def calculate_booking(ca_session, algorithm_key):
+    '''
+    calculate equalent booking from opportunity and allocation
+    # step 1, read csv from 35 and get all sales list.
+    # step 2, calculate allocated booking based on formula
+    # step 3, read "cleaned opportunity list", summary axis=1 by key
+    # step 4, loop each sales, and calculate booking from opportunity
+    # step 5, output 40-sales-key-booking.csv
+    # keep columns will be: acv nonbig deal, acv bigdeal, acv allocated, acv-booking-sfdc, acv-booking-allocated
+    # keep columns also includes: acv-booking and all applicable to PERB.
+    :param ca_session:
+    :param algorithm_key:
+    :return:
+    '''
+    combined_file_35 = ca_session.get_combined_sfdc_allocation_filename(algorithm_key)
+    combined_df = pd.read_csv(combined_file_35, index_col='EMPLOYEE NO')
+
+    cleaned_sfdc_file = ca_session.get_default_cleaned_SFDC_filename()
+    cleaned_sfdc_df = pd.read_csv(cleaned_sfdc_file, dtype={'RELATIONSHIP TYPE': object})
+
+    config_dict = getGeneralConfigurationDict("SFDC Summary Rule", ca_session.get_configuration_file())
+    allowed_key = []
+    for key, col_list in config_dict.iteritems():
+        cleaned_sfdc_df[key.upper()] = cleaned_sfdc_df[col_list].sum(axis=1)
+        cleaned_sfdc_df.drop(col_list, inplace=True, axis=1)
+        allowed_key.append(key.upper())
+
+    for key in allowed_key:
+        combined_df[key.upper() + "_ALLOCATED_booking"] = 0.0
+        combined_df[key.upper() + "_SFDC_booking"] = 0.0
+
+    for index, row in combined_df.iterrows():
+        # print(index)
+        # print(row)
+        sales_sfdc_df = cleaned_sfdc_df[cleaned_sfdc_df['EMPLOYEE NO'] == index]
+        if index == 569:
+            print(sales_sfdc_df)
+        for key in allowed_key:
+            booking_allocated, booking_sfdc = calculate_row_booking(
+                ca_session, key, index, row[key.upper() + '_ALLOCATED'], sales_sfdc_df)
+            combined_df.loc[index, key.upper() + "_ALLOCATED_booking"] = booking_allocated
+            combined_df.loc[index, key.upper() + "_SFDC_booking"] = booking_sfdc
+
+            if index == 569:
+                print("%s->booking_allocated:%0.2f->booking_sfdc:%0.2f" % (key, booking_allocated, booking_sfdc))
+
+    combined_df.to_csv(ca_session.get_booking_result_filename(algorithm_key))
+
+
+def calculate_row_booking(ca_session, key, emp_index, key_allocated, sales_sfdc_df):
+    booking_allocated = 0.0
+    booking_sfdc = 0.0
+    formula_key = ca_session.get_formula_mapping().get(key, None)
+    if not formula_key:
+        raise ValueError("Key:%s can't be found with %d" % (key, emp_index))
+
+    if formula_key.upper() == 'ACV':
+        booking_allocated = get_acv_booking_allocated(ca_session, key, emp_index, key_allocated)
+        booking_sfdc = get_acv_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df)
+    elif formula_key.upper() == 'PERB':
+        booking_allocated = get_perb_booking_allocated(ca_session, key, emp_index, key_allocated)
+        booking_sfdc = get_perb_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df)
+    else:
+        raise ValueError("Undefined formula key:%s with %d" % (formula_key, emp_index))
+
+    return booking_allocated, booking_sfdc
+
+
+def get_perb_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df):
+    emp = ca_session.get_hierarchy().get_emp_list().get("%d" % emp_index, None)
+    if not emp:
+        raise ValueError("%d can't be found with %s" % (emp_index, key))
+
+    booking_sfdc = 0.0
+    for index, row in sales_sfdc_df.iterrows():
+        opportunity_key_value = row[key.upper()]
+        if abs(opportunity_key_value) < 0.01:
+            continue
+
+        peb_factor = ca_session.get_perb_sfdc_peb_factor()
+        disco_factor = ca_session.get_perb_sfdc_disco_factor(row['DEAL SCORE'])
+        newsupport_factor = ca_session.get_perb_sfdc_newsupport_factor(row['RELATIONSHIP TYPE'])
+
+        booking_sfdc += row[key.upper()] * peb_factor * disco_factor * newsupport_factor
+
+    return booking_sfdc
+
+
+def get_acv_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df):
+    emp = ca_session.get_hierarchy().get_emp_list().get("%d" % emp_index, None)
+    if not emp:
+        raise ValueError("%d can't be found with %s" % (emp_index, key))
+
+    booking_sfdc = 0.0
+    for index, row in sales_sfdc_df.iterrows():
+        opportunity_key_value = row[key.upper()]
+        if abs(opportunity_key_value) < 0.01:
+            continue
+
+        peb_factor = ca_session.get_acv_sfdc_peb_factor(emp.get_multiplier(), row['RELATIONSHIP TYPE'])
+        disco_factor = ca_session.get_acv_sfdc_disco_factor(row['DEAL SCORE'])
+        duration_factor = ca_session.get_acv_duration_factor(str(row['DURATION(MONTHS)']))
+
+        booking_sfdc += row[key.upper()] * peb_factor * disco_factor * duration_factor
+
+    return booking_sfdc
+
+
+def get_perb_booking_allocated(ca_session, key, emp_index, key_allocated):
+    emp = ca_session.get_hierarchy().get_emp_list().get("%d" % emp_index, None)
+    if not emp:
+        raise ValueError("%d can't be found with %s" % (emp_index, key))
+    newsupport_factor = ca_session.get_perb_allocated_newsupport_factor()
+    perp_factor = ca_session.get_perb_allocated_perp_factor()
+    perp_disco_factor = ca_session.get_perb_allocated_disco_factor()
+
+    return key_allocated * newsupport_factor * perp_factor * perp_disco_factor
+
+
+def get_acv_booking_allocated(ca_session, key, emp_index, key_allocated):
+    emp = ca_session.get_hierarchy().get_emp_list().get("%d" % emp_index, None)
+    if not emp:
+        raise ValueError("%d can't be found with %s" % (emp_index, key))
+
+    multiplier = emp.get_multiplier().upper()
+    multiplier_factor = ca_session.get_acv_allocated_multiplier(multiplier)
+    disco_factor = ca_session.get_acv_allocated_disco_factor()
+    duration_factor = ca_session.get_acv_allocated_duration_factor()
+
+    return key_allocated * multiplier_factor * disco_factor * duration_factor
 
 def combine_SFDC_allocation(ca_session, algorithm_key):
     # this combination should based all available sales and manager from GEO.
@@ -296,10 +428,7 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
     # get default filtered_pivot_SFDC, not file list.
     filtered_df = pd.read_csv(filtered_pivot, index_col=['EMPLOYEE NO', 'BIG DEAL'])
 
-    non_bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'NO'].copy()
-    bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'YES'].copy()
-    bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
-    non_bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
+
     '''
     # can't remove inactive and manager too earlier since their numbers should be deducted from plan first.
 
@@ -311,21 +440,20 @@ def allocate_remaining_GEO(ca_session, algorithm_key):
     '''
 
     for key, column_list in config_dict.iteritems():
-        bigdeal_key = key.upper() + "_BIGDEAL"
-        nonbigdeal_key = key.upper() + "_NONBIGDEAL"
-        non_bigdeal_filtered_df.loc[:, nonbigdeal_key] = non_bigdeal_filtered_df[column_list].sum(axis=1)
-        non_bigdeal_filtered_df = non_bigdeal_filtered_df.drop(column_list, axis=1)
-
-        bigdeal_filtered_df.loc[:, bigdeal_key] = bigdeal_filtered_df[column_list].sum(axis=1)
-        bigdeal_filtered_df = bigdeal_filtered_df.drop(column_list, axis=1)
+        filtered_df[key.upper()] = filtered_df[column_list].sum(axis=1)
+        filtered_df = filtered_df.drop(column_list, axis=1)
 
     for col in filtered_df.columns:
         if "TOTAL" in col:
-            bigdeal_filtered_df.drop(col, axis=1, inplace=True)
-            non_bigdeal_filtered_df.drop(col, axis=1, inplace=True)
+            filtered_df.drop(col, axis=1, inplace=True)
+
+    non_bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'NO'].copy()
+    bigdeal_filtered_df = filtered_df[filtered_df.index.get_level_values('BIG DEAL') == 'YES'].copy()
+    bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
+    non_bigdeal_filtered_df.reset_index(level=1, drop=True, inplace=True)
 
     filtered_df = pd.merge(bigdeal_filtered_df, non_bigdeal_filtered_df, left_index=True,
-                           right_index=True, how='outer')
+                           right_index=True, how='outer', suffixes=('_BIGDEAL', '_NONBIGDEAL'))
     filtered_df.fillna(0, inplace=True)
     # now 5 columns left, Employee No, ACV-Nonbigdeal, Perb-Nonbigdeal, ACV-Bigdeal, Perb-Bigdeal
     # print(filtered_df[filtered_df.index.get_level_values('EMPLOYEE NO') == 51563])

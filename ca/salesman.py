@@ -3,17 +3,28 @@ import sys
 
 class Salesman:
     # initialize name, ID number, city
-    def __init__(self, emp_no, emp_name, term=None):
+    def __init__(self, emp_no, emp_name, term=None, multiplier=""):
         self.__emp_no = emp_no
         self.__emp_name = emp_name
         self.__reporters = []
         self.__boss = []
         self.__is_overlay = False
         self.__is_termed = False
+        if not multiplier:
+            multiplier = ""
+        multiplier = multiplier.strip().replace(" ", "")
+
+        self.__multiplier = multiplier  # 2.7 or 3xACV; 2XACV; _blank_
         if term:
             term_str = term.upper().strip()
             if term_str == "TRUE" or term_str == "TERM":
                 self.__is_termed = True
+
+    def set_multiplier(self, multiplier):
+        self.__multiplier = multiplier
+
+    def get_multiplier(self):
+        return self.__multiplier
 
     def get_emp_no(self):
         return self.__emp_no
@@ -78,6 +89,7 @@ class Salesman:
         name_string += "->" + self.__emp_no + ":" + self.__emp_name + "->[" + ":".join(self.__reporters) + "]"
         if self.__is_termed:
             name_string += " Termed"
+        name_string += " " + self.__multiplier
         return name_string
 
 

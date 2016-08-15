@@ -3,6 +3,7 @@ import os
 import re
 import pandas as pd
 import csv
+import ConfigParser
 
 sys.path.append(".")
 
@@ -58,17 +59,274 @@ class CASession:
         self.__sales_plannedmgr_mapping_file = None
         self.__all_managers = None  # all up level managers of current lowest level sales rep.
 
+        self.__allocation_way1_sales_split = []
+        self.__allocation_way1_booking_split = []
+        self.__allocation_way2_sales_split = []
+        self.__allocation_way2_booking_split = []
+
+        self.__formula_mapping = {}  # {CTP-SUBSCRIPTION ACV:ACV, CTP - PERPETUAL LICENSE:PERB}
+        # ACV
+        self.__sfdc_acv_disco_normal = {}  # { 'A':1.2, 'B':1.1, 'C':1.0, 'D':0.85, 'F':0.65}
+        # SFDC.DISCO Factor.NormalKey = A,B,C,D,F
+        # SFDC.DISCO Factor.NormalValue = 1.2, 1.1, 1.0, 0.85, 0.65
+        self.__sfdc_acv_disco_other = 1.0  # SFDC.DISCO Factor.Other = 1.0
+        self.__allocated_acv_disco = 1.0  # Allocated.DISCO Factor = 1.15
+        self.__sfdc_duration_factor = [1.1, 1.15, 1.20]  # SFDC.Duration Factor = 1.1, 1.15, 1.20
+        self.__allocated_duration_factor = 1.15  # Allocated.Dueration Factor = 1.15
+        self.__peb_sfdc_27or3_direct = 2.7  # PEB Factor.SFDC.2.7 or 3xACV.Direct = 2.7
+        self.__peb_sfdc_27or3_other = 3.0  # PEB Factor.SFDC.2.7 or 3xACV.Other = 3.0
+        self.__peb_sfdc_2x = 2.0  # PEB Factor.SFDC.2XACV = 2.0
+        self.__peb_sfdc_other = 1.0  # PEB Factor.SFDC.Other = 1.0
+        self.__peb_allocated_27or3 = 2.7  # PEB Factor.Allocated.2.7 or 3xACV = 2.7
+        self.__peb_allocated_2x = 2.0  # PEB Factor.Allocated.2XACV = 2.0
+        self.__peb_allocated_other = 1.0  # PEB Factor.Allocated.Other = 1.0
+
+        # PERB
+        self.__sfdc_perb_disco_normal = {}  # { 'A':1.2, 'B':1.1, 'C':1.0, 'D':0.85, 'F':0.65}
+        # SFDC.DISCO Factor.NormalKey = A,B,C,D,F
+        # SFDC.DISCO Factor.NormalValue = 1.2, 1.1, 1.0, 0.85, 0.65
+        self.__sfdc_perb_disco_other = 1.0  # SFDC.DISCO Factor.Other = 1.0
+        self.__allocated_perb_disco = 1.0  # Allocated.DISCO Factor = 1.15
+        self.__sfdc_newsupport_direct = 1.23  # New Support Factor.SFDC.Direct = 1.23
+        self.__sfdc_newsupport_other = 1.33  # New Support Factor.SFDC.Other = 1.33
+        self.__allocated_newsupport = 1.23  # New Support Factor.Allocated = 1.23
+        self.__perp_sfdc = 1.0  # Perpetual Factor.SFDC = 1.0
+        self.__perp_allocated = 1.0  # Perpetual Factor.Allocated = 1.0
+
         self.__init_from_folder(folder)
         self.__initialize_default_files()
         self.__init_subfolders()
+        self.__init_allocation_ways()
+        self.__init_booking_calculation_factors()
+
+    def get_perb_sfdc_disco_factor(self, disco):
+        disco_key = ""
+        if disco:
+            disco_key = str(disco).strip().upper()
+
+        return self.__sfdc_perb_disco_normal.get(disco_key, self.__sfdc_perb_disco_other)
+
+    def get_perb_sfdc_peb_factor(self):
+        return self.__perp_sfdc
+
+    def get_perb_sfdc_newsupport_factor(self, relationship_type):
+        if relationship_type and str(relationship_type).upper() == 'DIRECT':
+            return self.__sfdc_newsupport_direct
+        else:
+            return self.__sfdc_newsupport_other
+
+    def get_acv_duration_factor(self, duration_str):
+        duration = "36"
+        if duration_str:
+            duration = duration_str.strip()
+            if duration == "":
+                duration = "36"
+
+        try:
+            duration_int = int(duration)
+            if duration_int < 24:
+                return self.__sfdc_duration_factor[0]
+            elif 36 > duration_int >= 24:
+                return self.__sfdc_duration_factor[1]
+            else:
+                return self.__sfdc_duration_factor[2]
+        except ValueError:
+            return self.__sfdc_duration_factor[2]
+
+    def get_acv_sfdc_disco_factor(self, disco):
+        disco_key = ""
+        if disco:
+            disco_key = str(disco).strip().upper()
+
+        return self.__sfdc_acv_disco_normal.get(disco_key, self.__sfdc_acv_disco_other)
+
+    def get_acv_sfdc_peb_factor(self, multiplier, relationship_type):
+        multiplier = multiplier.strip().replace(" ", "")
+        if '2.7or3xACV'.upper() in multiplier:
+            if relationship_type and relationship_type.upper() == 'DIRECT':
+                return self.__peb_sfdc_27or3_direct
+            else:
+                return self.__peb_sfdc_27or3_other
+        elif '2XACV'.upper() in multiplier:
+            return self.__peb_sfdc_2x
+        else:
+            return self.__peb_sfdc_other
+
+    def get_perb_allocated_disco_factor(self):
+        return self.__allocated_perb_disco
+
+    def get_perb_allocated_perp_factor(self):
+        return self.__perp_allocated
+
+    def get_perb_allocated_newsupport_factor(self):
+        return self.__allocated_newsupport
+
+    def get_acv_allocated_disco_factor(self):
+        return self.__allocated_acv_disco
+
+    def get_acv_allocated_duration_factor(self):
+        return self.__allocated_duration_factor
+
+    def get_acv_allocated_multiplier(self, multiplier):
+        multiplier = multiplier.strip().replace(" ", "")
+        if '2.7or3xACV'.upper() in multiplier:
+            return self.__peb_allocated_27or3
+        elif '2XACV'.upper() in multiplier:
+            return self.__peb_allocated_2x
+        else:
+            return self.__peb_allocated_other
+
+    def __init_booking_calculation_factors(self):
+        config_dict = self.__getGeneralConfigurationDict("SFDC Summary Rule", self.get_configuration_file())
+        caconfig = ConfigParser.ConfigParser()
+        caconfig.read(self.get_configuration_file())
+
+        for key in config_dict.keys():
+            key_section_str = key.upper() + "-Booking Calculation Rule"
+            options = caconfig.options(key_section_str)
+            # print("Key=%s\n" % key)
+            # print(options)
+            # print("\n\n")
+            formula_key = caconfig.get(key_section_str, 'Formula.Key')
+            if not formula_key:
+                raise ValueError("Can't find matched booking calculation rule for:%s" % key.upper())
+            self.__formula_mapping[key.upper()] = formula_key  # mapping to ACV, PERB
+            if formula_key.upper() == 'ACV':
+                try:
+                    normal_key = [x.strip()
+                                  for x in (caconfig.get(key_section_str, 'SFDC.DISCO Factor.NormalKey')).split(",")]
+                    normal_value = [float(x.strip())
+                                    for x in
+                                    (caconfig.get(key_section_str, 'SFDC.DISCO Factor.NormalValue')).split(",")]
+                    self.__sfdc_acv_disco_normal = dict(zip(normal_key, normal_value))
+                    # { 'A':1.2, 'B':1.1, 'C':1.0, 'D':0.85, 'F':0.65}
+                    # SFDC.DISCO Factor.NormalKey = A,B,C,D,F
+                    # SFDC.DISCO Factor.NormalValue = 1.2, 1.1, 1.0, 0.85, 0.65
+                    self.__sfdc_acv_disco_other = float(caconfig.get(key_section_str, 'SFDC.DISCO Factor.Other'))
+                    # SFDC.DISCO Factor.Other = 1.0
+                    self.__allocated_acv_disco = float(caconfig.get(key_section_str, 'Allocated.DISCO Factor'))
+                    # Allocated.DISCO Factor = 1.15
+                    self.__sfdc_duration_factor = [float(x.strip())
+                                                   for x in
+                                                   (caconfig.get(key_section_str, 'SFDC.Duration Factor')).split(",")]
+                    # SFDC.Duration Factor = 1.1, 1.15, 1.20
+                    self.__allocated_duration_factor = float(
+                        caconfig.get(key_section_str, 'Allocated.Dueration Factor'))
+                    # Allocated.Dueration Factor = 1.15
+                    self.__peb_sfdc_27or3_direct = float(
+                        caconfig.get(key_section_str, r'PEB Factor.SFDC.2.7or3xACV.Direct'))
+                    # PEB Factor.SFDC.2.7or3xACV.Direct = 2.7
+                    self.__peb_sfdc_27or3_other = float(
+                        caconfig.get(key_section_str, 'PEB Factor.SFDC.2.7or3xACV.Other'))
+                    # PEB Factor.SFDC.2.7or3xACV.Other = 3.0
+                    self.__peb_sfdc_2x = float(caconfig.get(key_section_str, 'PEB Factor.SFDC.2XACV'))
+                    # PEB Factor.SFDC.2XACV = 2.0
+                    self.__peb_sfdc_other = float(caconfig.get(key_section_str, 'PEB Factor.SFDC.Other'))
+                    # PEB Factor.SFDC.Other = 1.0
+                    self.__peb_allocated_27or3 = float(caconfig.get(key_section_str, 'PEB Factor.Allocated.2.7or3xACV'))
+                    # PEB Factor.Allocated.2.7or3xACV = 2.7
+                    self.__peb_allocated_2x = float(caconfig.get(key_section_str, 'PEB Factor.Allocated.2XACV'))
+                    # PEB Factor.Allocated.2XACV = 2.0
+                    self.__peb_allocated_other = float(caconfig.get(key_section_str, 'PEB Factor.Allocated.Other'))
+                    # PEB Factor.Allocated.Other = 1.0
+                except ValueError as detail:
+                    print(options)
+                    print("Error message:")
+                    print(detail)
+                    raise ValueError("Value error found in definition for:%s in %s" % (key, formula_key))
+            elif formula_key.upper() == 'PERB':
+                try:
+                    normal_key = [x.strip()
+                                  for x in (caconfig.get(key_section_str, 'SFDC.DISCO Factor.NormalKey')).split(",")]
+                    normal_value = [float(x.strip())
+                                    for x in
+                                    (caconfig.get(key_section_str, 'SFDC.DISCO Factor.NormalValue')).split(",")]
+                    self.__sfdc_perb_disco_normal = dict(zip(normal_key, normal_value))
+                    # { 'A':1.2, 'B':1.1, 'C':1.0, 'D':0.85, 'F':0.65}
+                    # SFDC.DISCO Factor.NormalKey = A,B,C,D,F
+                    # SFDC.DISCO Factor.NormalValue = 1.2, 1.1, 1.0, 0.85, 0.65
+                    self.__sfdc_perb_disco_other = float(caconfig.get(key_section_str, 'SFDC.DISCO Factor.Other'))
+                    # SFDC.DISCO Factor.Other = 1.0
+                    self.__allocated_perb_disco = float(caconfig.get(key_section_str, 'Allocated.DISCO Factor'))
+                    # Allocated.DISCO Factor = 1.15
+                    self.__sfdc_newsupport_direct = float(
+                        caconfig.get(key_section_str, 'New Support Factor.SFDC.Direct'))
+                    # New Support Factor.SFDC.Direct = 1.23
+                    self.__sfdc_newsupport_other = float(caconfig.get(key_section_str, 'New Support Factor.SFDC.Other'))
+                    # New Support Factor.SFDC.Other = 1.33
+                    self.__allocated_newsupport = float(caconfig.get(key_section_str, 'New Support Factor.Allocated'))
+                    # New Support Factor.Allocated = 1.23
+                    self.__perp_sfdc = float(caconfig.get(key_section_str, 'Perpetual Factor.SFDC'))
+                    # Perpetual Factor.SFDC = 1.0
+                    self.__perp_allocated = float(caconfig.get(key_section_str, 'Perpetual Factor.Allocated'))
+                    # Perpetual Factor.Allocated = 1.0
+                except ValueError as detail:
+                    print(options)
+                    print("Error message:")
+                    print(detail)
+                    raise ValueError("Value error found in definition for:%s in %s" % (key, formula_key))
+            else:
+                raise ValueError("Undefined formula key:%s" % formula_key)
+
+    def get_formula_mapping(self):
+        if not self.__formula_mapping:
+            raise ValueError("Formula mapping hasn't been intialized yet!")
+
+        return self.__formula_mapping
+
+    def __getGeneralConfigurationDict(self, section, configuration_file=r'./config.ini'):
+        caconfig = ConfigParser.ConfigParser()
+        caconfig.read(configuration_file)
+        current_config = {}
+
+        options = caconfig.options(section)
+        return_dict = {}
+
+        for option in options:
+            current_config[option] = caconfig.get(section, option)
+            return_dict[option] = map(lambda x: x.strip(), current_config[option].split(","))
+
+        return return_dict
+
+    def __init_allocation_ways(self):
+        section = "Allocation Rule"
+        configuration_file = self.__configuration_file
+
+        caconfig = ConfigParser.ConfigParser()
+        caconfig.read(configuration_file)
+
+        options = caconfig.options(section)
+
+        try:
+            for option in options:
+                option_value = caconfig.get(section, option)
+                sales_str, booking_str = option_value.split(";")
+                if option.upper() == "WAY1":
+                    self.__allocation_way1_sales_split = [float(i.strip()) for i in sales_str.split(",")]
+                    self.__allocation_way1_booking_split = [float(i.strip()) for i in booking_str.split(",")]
+                else:
+                    self.__allocation_way2_sales_split = [float(i.strip()) for i in sales_str.split(",")]
+                    self.__allocation_way2_booking_split = [float(i.strip()) for i in booking_str.split(",")]
+        except ValueError:
+            raise ValueError("Allocation rules include unconvertable float!")
+
+        if abs(sum(self.__allocation_way1_sales_split) - 1.0) > 0.0000001 or \
+                        abs(sum(self.__allocation_way1_booking_split) - 1.0) > 0.0000001 or \
+                        abs(sum(self.__allocation_way2_sales_split) - 1.0) > 0.0000001 or \
+                        abs(sum(self.__allocation_way1_booking_split) - 1.0) > 0.0000001:
+            raise ValueError("Allocation rules include a summary which is not equal to 1.0!")
 
     def get_band_way1(self):
         '''
         return 6-12 first band way, sales portion in 3 segments
         :return:
         '''
-        p_sales_proportion = [0.45, 0.40, 0.15]
-        p_booking_proportion = [0.0, 0.50, 0.50]
+        if len(self.__allocation_way1_sales_split) == 0 or len(self.__allocation_way1_booking_split) == 0 or \
+                        len(self.__allocation_way1_sales_split) != len(self.__allocation_way1_booking_split):
+            raise ValueError("Allocation Way1 has unmatched Value!")
+
+        p_sales_proportion = self.__allocation_way1_sales_split
+        p_booking_proportion = self.__allocation_way1_booking_split
         return p_sales_proportion, p_booking_proportion
 
     def get_band_way2(self):
@@ -76,8 +334,12 @@ class CASession:
         return 13+ second band way, sales portion in 4 segments
         :return:
         '''
-        p_sales_proportion = [0.45, 0.35, 0.14, 0.06]
-        p_booking_proportion = [0.0, 0.20, 0.40, 0.40]
+        if len(self.__allocation_way2_sales_split) == 0 or len(self.__allocation_way2_booking_split) == 0 or \
+                        len(self.__allocation_way2_sales_split) != len(self.__allocation_way2_booking_split):
+            raise ValueError("Allocation Way1 has unmatched Value!")
+
+        p_sales_proportion = self.__allocation_way2_sales_split
+        p_booking_proportion = self.__allocation_way2_booking_split
         return p_sales_proportion, p_booking_proportion
 
 
@@ -104,9 +366,14 @@ class CASession:
 
         return self.__all_managers
 
+    def get_booking_result_filename(self, algorithm_key):
+        return os.path.join(
+            self.__processing_folder, "40-Sales-" + algorithm_key + "-Booking.csv"
+        )
+
     def get_manager_rollup_filename(self, algorithm_key):
         return os.path.join(
-            self.__processing_folder, "40-Manager-" + algorithm_key + "-Rollup.csv"
+            self.__processing_folder, "45-Manager-" + algorithm_key + "-Rollup.csv"
         )
 
     def get_combined_sfdc_allocation_filename(self, algorithm_key):
@@ -316,6 +583,11 @@ class CASession:
             self.__cleaned_sfdc_filelist = []
             self.__cleaned_sfdc_file = sfdc_file  # setup first as default.
         self.__cleaned_sfdc_filelist.append(sfdc_file)
+
+    def get_default_cleaned_SFDC_filename(self):
+        if not self.__cleaned_sfdc_file:
+            raise ValueError("Default cleaned SFDC file hasn't been initialized yet!")
+        return self.__cleaned_sfdc_file
 
     def get_cleaned_SFDC_filelist(self):
         if not self.__cleaned_sfdc_filelist:

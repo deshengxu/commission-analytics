@@ -379,7 +379,8 @@ def build_hierarchy_from_csv(csvfile):
     for index, row in df.iterrows():
         # print index, row['NAME']
         new_sales = salesman.Salesman(str(index), row['NAME'],
-                                      str(row['Status']))  # index has to be converted to string.
+                                      str(row['Status'],
+                                          str(row['Multiplier'])))  # index has to be converted to string.
         if pd.notnull(row['MANAGER']):
             new_sales.set_boss(row['MANAGER'])
 
