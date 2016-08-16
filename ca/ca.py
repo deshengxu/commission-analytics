@@ -28,6 +28,8 @@ def main():
     # position = ca_session.get_hierarchy().generate_position()
     # org_illustration.illustrate(ca_session.get_hierarchy(), position, ca_session.get_img_filename())
     ca_session.clean_bookings()
+    ca_session.clean_commission_plan()
+    ca_session.clean_ytd_file()
     ca_utility.clean_SFDC_files(ca_session)
     # print(ca_session.get_cleaned_SFDC_filelist())
 
@@ -71,24 +73,30 @@ def main():
     ca_utility.combine_SFDC_allocation(ca_session, "highest")
     ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
     print("Done!\n")
+    '''
 
     print("\n\nStart to allocate based on regular algorithm...")
     ca_utility.allocate_remaining_GEO(ca_session, "regular")
     ca_utility.combine_SFDC_allocation(ca_session, "regular")
+    ca_utility.calculate_booking(ca_session, "regular")
     ca_utility.roll_up_SFDC_GEO(ca_session, "regular")
+    ca_utility.combine_manager_sales(ca_session, "regular")
     print("Done!\n\n\n")
 
-    print("Start to allocate based on highest algorithm...")
+    print("\n\nStart to allocate based on highest algorithm...")
     ca_utility.allocate_remaining_GEO(ca_session, "highest")
     ca_utility.combine_SFDC_allocation(ca_session, "highest")
+    ca_utility.calculate_booking(ca_session, "highest")
     ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
-    print("Done!\n")
-    '''
+    ca_utility.combine_manager_sales(ca_session, "highest")
+    print("Done!\n\n\n")
+
     print("\n\nStart to allocated based on best guess algorithm...")
     ca_utility.allocate_remaining_GEO(ca_session, "bestguess")
     ca_utility.combine_SFDC_allocation(ca_session, "bestguess")
     ca_utility.calculate_booking(ca_session, "bestguess")
     ca_utility.roll_up_SFDC_GEO(ca_session, "bestguess")
+    ca_utility.combine_manager_sales(ca_session, "bestguess")
     print("Done!\n")
 
 

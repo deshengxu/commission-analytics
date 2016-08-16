@@ -22,6 +22,15 @@ class CASession:
     page_bottom_margin = 0.2
     block_height = 1.0
     block_h_gap = 0.4
+    t1_amount_col = r'PEB & New SPT Tier 1 Amount (USD)'
+    t2_amount_col = r'PEB & New SPT Tier 2 Amount (USD)'
+    t3_amount_col = r'PEB & New SPT Tier 3 Amount (USD)'
+    t4_amount_col = r'PEB & New SPT Tier 4 Amount (USD)'
+    t1_rate_col = r'PEB & New SPT Tier 1 Rate'
+    t2_rate_col = r'PEB & New SPT Tier 2 Rate'
+    t3_rate_col = r'PEB & New SPT Tier 3 Rate'
+    t4_rate_col = r'PEB & New SPT Tier 4 Rate'
+    t5_rate_col = r'PEB & New SPT Tier 5 Rate'
 
     def __init__(self, folder):
         self.__project_folder = None  # indicate project folder in absolute path, /Desheng/FY16Q3
@@ -31,6 +40,7 @@ class CASession:
         self.__GEO_folder = None
         self.__filter_folder = None
         self.__processing_folder = None
+        self.__commission_folder = None
         self.__year = None
         self.__quarter = None
 
@@ -58,6 +68,8 @@ class CASession:
         self.__cleaned_geo_file = None
         self.__sales_plannedmgr_mapping_file = None
         self.__all_managers = None  # all up level managers of current lowest level sales rep.
+        self.__commission_ytd_file = None
+        # self.__cleaned_ytd_file = None
 
         self.__allocation_way1_sales_split = []
         self.__allocation_way1_booking_split = []
@@ -98,6 +110,9 @@ class CASession:
         self.__init_subfolders()
         self.__init_allocation_ways()
         self.__init_booking_calculation_factors()
+
+    def get_commission_plan_file(self):
+        return self.__commission_plan
 
     def get_perb_sfdc_disco_factor(self, disco):
         disco_key = ""
@@ -368,12 +383,17 @@ class CASession:
 
     def get_booking_result_filename(self, algorithm_key):
         return os.path.join(
-            self.__processing_folder, "40-Sales-" + algorithm_key + "-Booking.csv"
+            self.__processing_folder, "40-Sales-" + algorithm_key + "-AllocationAndCommission.csv"
         )
 
     def get_manager_rollup_filename(self, algorithm_key):
         return os.path.join(
             self.__processing_folder, "45-Manager-" + algorithm_key + "-Rollup.csv"
+        )
+
+    def get_full_rollup_filename(self, algorithm_key):
+        return os.path.join(
+            self.__processing_folder, "50-Full-" + algorithm_key + "-Rollup.csv"
         )
 
     def get_combined_sfdc_allocation_filename(self, algorithm_key):
@@ -617,6 +637,7 @@ class CASession:
         self.__GEO_folder = self.__setup_subfolder("GEO")
         self.__filter_folder = self.__setup_subfolder("filter")
         self.__processing_folder = self.__setup_subfolder("processing")
+        self.__commission_folder = self.__setup_subfolder("commission")
 
     def get_configuration_file(self):
         if not self.__configuration_file:
@@ -760,6 +781,13 @@ class CASession:
         else:
             raise ValueError("Can't find commission plan file %s in project folder!" % (commission_plan_file))
 
+        commission_ytd_file = os.path.join(self.__project_folder,
+                                           ("FY%2dYTD-BookingandCommission.csv" % self.__year))
+        if os.path.isfile(commission_ytd_file) and os.path.exists(commission_ytd_file):
+            self.__commission_ytd_file = commission_ytd_file
+        else:
+            raise ValueError("Can't find commission and booking YTD file %s in project folder!" % commission_ytd_file)
+
     def __initialize_hierarchy(self, csvfile):
         df = pd.read_csv(csvfile, index_col='EMPLOYEE NO',
                          dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object})
@@ -780,6 +808,103 @@ class CASession:
             raise ValueError("Hierarchy has not been initialized yet!")
         else:
             return self.__hierarchy
+
+    def get_cleaned_commission_plan_filename(self):
+        return os.path.join(
+            self.__commission_folder, "Cleaned-" + os.path.basename(self.__commission_plan)
+        )
+
+    def get_cleaned_ytd_filename(self):
+        return os.path.join(
+            self.__commission_folder, "Cleaned-" + os.path.basename(self.__commission_ytd_file)
+        )
+
+    def clean_ytd_file(self):
+        print("\n\nStart to clean YTD file ...")
+        old_filename = self.__commission_ytd_file
+        new_filename = self.get_cleaned_ytd_filename()
+
+        with open(old_filename, "r") as oldfile, open(new_filename, "w") as newfile:
+            oldcsv = csv.reader(oldfile)
+            newcsv = csv.writer(newfile)
+            first_line = True
+            emp_index = -1
+            name_index = -1
+
+            for r_index, line in enumerate(oldcsv):
+                if first_line:
+                    header_list = []
+                    for index, cell in enumerate(line):
+                        tmp_str = cell.strip()
+                        if 'Employee' in tmp_str:
+                            emp_index = index
+                            header_list.append(tmp_str.upper().strip())
+                        elif 'Name' in tmp_str:
+                            name_index = index
+                        else:
+                            header_list.append(tmp_str.strip())
+                    newcsv.writerow(header_list)
+                    first_line = False
+                else:
+                    data_list = []
+                    for index, cell in enumerate(line):
+                        if index == emp_index:
+                            try:
+                                emp_id = int(cell.strip())
+                                data_list.append(emp_id)
+                            except:
+                                raise ValueError("Bad emp id(%s) in YTD commission file! Continue" % cell)
+                        elif not index == name_index:
+                            try:
+                                cell_value = float(cell.strip().replace(",", ""))
+                                data_list.append(cell_value)
+                            except:
+                                raise ValueError("Value error in %d->%s" % (index, cell))
+                    newcsv.writerow(data_list)
+
+    def clean_commission_plan(self):
+        print("\n\nStart to clean commission plan....")
+        old_filename = self.__commission_plan
+        new_filename = self.get_cleaned_commission_plan_filename()
+
+        unused_col_list = ['Name', 'New Subscription Multiplier']
+        unused_col_index_list = []
+        with open(old_filename, "r") as oldfile, open(new_filename, "w") as newfile:
+            oldcsv = csv.reader(oldfile)
+            newcsv = csv.writer(newfile)
+            first_line = True
+            emp_index = -1
+            for r_index, line in enumerate(oldcsv):
+                if first_line:
+                    header_list = []
+                    for index, cell in enumerate(line):
+                        tmp_str = cell.strip()
+                        if 'Employee' in tmp_str:
+                            emp_index = index
+                            header_list.append(tmp_str.upper())
+                        elif not tmp_str in unused_col_list:
+                            header_list.append(tmp_str)
+                        else:
+                            unused_col_index_list.append(index)
+                    newcsv.writerow(header_list)
+                    first_line = False
+                else:
+                    data_list = []
+                    for index, cell in enumerate(line):
+                        if index == emp_index:
+                            try:
+                                tmp_index = int(cell)
+                                data_list.append(tmp_index)
+                            except:
+                                print("Bad Emp ID Value:%s in commission plan, continue!" % cell)
+                                continue
+                        elif not index in unused_col_index_list:
+                            tmp_str = cell.strip().replace(",", "")
+                            if tmp_str == "-":
+                                tmp_str = "0.0"
+                            data_list.append(tmp_str)
+
+                    newcsv.writerow(data_list)
 
     def clean_bookings(self):
         current_quarter = self.__quarter

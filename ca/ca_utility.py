@@ -19,6 +19,27 @@ except:
     import algorithm
 
 
+def combine_manager_sales(ca_session, algorithm_key):
+    sales_file = ca_session.get_booking_result_filename(algorithm_key)  # 40
+    manager_file = ca_session.get_manager_rollup_filename(algorithm_key)  # 45
+    full_file = ca_session.get_full_rollup_filename(algorithm_key)  # 50
+
+    sales_df = pd.read_csv(sales_file, index_col='EMPLOYEE NO')
+    sales_df = sales_df[sales_df['ISMANAGER'] == False]
+    sales_df = sales_df[sales_df['INACTIVE'] == False]
+
+    del_col_list = ['ISMANAGER', 'INACTIVE']
+    sales_df.drop(del_col_list, axis=1, inplace=True)
+
+    manager_df = pd.read_csv(manager_file, index_col='EMPLOYEE NO')
+
+    full_df = manager_df.append(sales_df)
+
+    full_df.to_csv(full_file)
+
+
+
+
 def roll_up_SFDC_GEO(ca_session, algorithm_key):
     # after combine_SFDC_allocation, roll up all managers numbers.
     # Step 1, pickup a manager from GEO List.
@@ -51,7 +72,63 @@ def roll_up_SFDC_GEO(ca_session, algorithm_key):
     cleaned_geo_df = pd.read_csv(cleaned_geo_file, index_col='EMPLOYEE NO')
     roll_up_df = pd.merge(roll_up_df, cleaned_geo_df, left_index=True,
                           right_index=True, suffixes=('', '_PLAN'), how='outer')
-    roll_up_df.to_csv(ca_session.get_manager_rollup_filename(algorithm_key))
+
+    ytd_df = pd.read_csv(ca_session.get_cleaned_ytd_filename(), index_col='EMPLOYEE NO')
+    for col in roll_up_df.columns:
+        if col in ytd_df.columns:
+            roll_up_df.drop(col, inplace=True, axis=1)
+
+    combined_df = pd.merge(roll_up_df, ytd_df, left_index=True, right_index=True, how='left')
+
+    # combined_df.fillna(0, inplace=True)
+
+    commission_plan_df = pd.read_csv(ca_session.get_cleaned_commission_plan_filename(), index_col='EMPLOYEE NO')
+    bad_index_list = []
+    wrong_index_list = []
+    available_index_list = list(commission_plan_df.index.values)
+
+    for index, row in combined_df.iterrows():
+        if not index in available_index_list:
+            bad_index_list.append(index)
+            continue
+        # if index == 118:
+        #    print(commission_plan_df.loc[118])
+        t1_amount = commission_plan_df.loc[index, ca_session.t1_amount_col]
+        t2_amount = commission_plan_df.loc[index, ca_session.t2_amount_col]
+        t3_amount = commission_plan_df.loc[index, ca_session.t3_amount_col]
+        t4_amount = commission_plan_df.loc[index, ca_session.t4_amount_col]
+        t1_rate = commission_plan_df.loc[index, ca_session.t1_rate_col]
+        t2_rate = commission_plan_df.loc[index, ca_session.t2_rate_col]
+        t3_rate = commission_plan_df.loc[index, ca_session.t3_rate_col]
+        t4_rate = commission_plan_df.loc[index, ca_session.t4_rate_col]
+        t5_rate = commission_plan_df.loc[index, ca_session.t5_rate_col]
+
+        # if index == 118:
+        #    print("t1_amount:%0.1f\tt1:%0.2f\tt3:%0.1f\tt4:%0.1f" % (t1_amount, t2_amount, t3_amount, t4_amount))
+
+        total_booking = float(row['NewBookingTotal']) + float(row['YTD-Booking'])
+
+        money_withnew, wrong_index = calculate_commission(
+            index, total_booking, t1_amount, t2_amount, t3_amount, t4_amount,
+            p2f(t1_rate), p2f(t2_rate), p2f(t3_rate), p2f(t4_rate), p2f(t5_rate)
+        )
+
+        if wrong_index:
+            wrong_index_list.append(wrong_index)
+
+        combined_df.loc[index, 'Commission-WithNew'] = round(money_withnew, 1)
+
+    combined_df['Current Q Commission'] = combined_df['Commission-WithNew'] - combined_df['YTD-Commission']
+
+    if len(bad_index_list) > 0:
+        print("\nFollowing manager(s) is not in commission plan!")
+        print(bad_index_list)
+
+    if len(wrong_index_list) > 0:
+        print("\nFollowing manager(s) has wrong commission plan! For example: T1 amount is 0.0")
+        print(wrong_index_list)
+
+    combined_df.to_csv(ca_session.get_manager_rollup_filename(algorithm_key))
     # print(roll_up_df)
     # print(all_managers)
     return
@@ -75,7 +152,8 @@ def calculate_booking(ca_session, algorithm_key):
     combined_df = pd.read_csv(combined_file_35, index_col='EMPLOYEE NO')
 
     cleaned_sfdc_file = ca_session.get_default_cleaned_SFDC_filename()
-    cleaned_sfdc_df = pd.read_csv(cleaned_sfdc_file, dtype={'RELATIONSHIP TYPE': object})
+    cleaned_sfdc_df = pd.read_csv(cleaned_sfdc_file,
+                                  dtype={'RELATIONSHIP TYPE': object, 'DEAL SCORE': object})
 
     config_dict = getGeneralConfigurationDict("SFDC Summary Rule", ca_session.get_configuration_file())
     allowed_key = []
@@ -84,7 +162,10 @@ def calculate_booking(ca_session, algorithm_key):
         cleaned_sfdc_df.drop(col_list, inplace=True, axis=1)
         allowed_key.append(key.upper())
 
+    booking_summary_cols = []
     for key in allowed_key:
+        booking_summary_cols.append(key.upper() + "_ALLOCATED_booking")
+        booking_summary_cols.append(key.upper() + "_SFDC_booking")
         combined_df[key.upper() + "_ALLOCATED_booking"] = 0.0
         combined_df[key.upper() + "_SFDC_booking"] = 0.0
 
@@ -92,19 +173,108 @@ def calculate_booking(ca_session, algorithm_key):
         # print(index)
         # print(row)
         sales_sfdc_df = cleaned_sfdc_df[cleaned_sfdc_df['EMPLOYEE NO'] == index]
-        if index == 569:
-            print(sales_sfdc_df)
+        # if index == 569:
+        #    print(sales_sfdc_df)
         for key in allowed_key:
             booking_allocated, booking_sfdc = calculate_row_booking(
                 ca_session, key, index, row[key.upper() + '_ALLOCATED'], sales_sfdc_df)
             combined_df.loc[index, key.upper() + "_ALLOCATED_booking"] = booking_allocated
             combined_df.loc[index, key.upper() + "_SFDC_booking"] = booking_sfdc
 
-            if index == 569:
-                print("%s->booking_allocated:%0.2f->booking_sfdc:%0.2f" % (key, booking_allocated, booking_sfdc))
+            # if index == 569:
+            #    print("%s->booking_allocated:%0.2f->booking_sfdc:%0.2f" % (key, booking_allocated, booking_sfdc))
+
+    combined_df['NewBookingTotal'] = combined_df[booking_summary_cols].sum(axis=1)
+    ytd_df = pd.read_csv(ca_session.get_cleaned_ytd_filename(), index_col='EMPLOYEE NO')
+
+    combined_df = pd.merge(combined_df, ytd_df, left_index=True, right_index=True,
+                           how='left')
+    combined_df.fillna(0, inplace=True)
+
+    commission_plan_df = pd.read_csv(ca_session.get_cleaned_commission_plan_filename(), index_col='EMPLOYEE NO')
+    bad_index_list = []
+    wrong_index_list = []
+    available_index_list = list(commission_plan_df.index.values)
+
+    for index, row in combined_df.iterrows():
+        if not index in available_index_list:
+            bad_index_list.append(index)
+            continue
+        # if index == 118:
+        #    print(commission_plan_df.loc[118])
+        t1_amount = commission_plan_df.loc[index, ca_session.t1_amount_col]
+        t2_amount = commission_plan_df.loc[index, ca_session.t2_amount_col]
+        t3_amount = commission_plan_df.loc[index, ca_session.t3_amount_col]
+        t4_amount = commission_plan_df.loc[index, ca_session.t4_amount_col]
+        t1_rate = commission_plan_df.loc[index, ca_session.t1_rate_col]
+        t2_rate = commission_plan_df.loc[index, ca_session.t2_rate_col]
+        t3_rate = commission_plan_df.loc[index, ca_session.t3_rate_col]
+        t4_rate = commission_plan_df.loc[index, ca_session.t4_rate_col]
+        t5_rate = commission_plan_df.loc[index, ca_session.t5_rate_col]
+
+        # if index == 118:
+        #    print("t1_amount:%0.1f\tt1:%0.2f\tt3:%0.1f\tt4:%0.1f" % (t1_amount, t2_amount, t3_amount, t4_amount))
+
+        total_booking = float(row['NewBookingTotal']) + float(row['YTD-Booking'])
+
+        money_withnew, wrong_index = calculate_commission(
+            index, total_booking, t1_amount, t2_amount, t3_amount, t4_amount,
+            p2f(t1_rate), p2f(t2_rate), p2f(t3_rate), p2f(t4_rate), p2f(t5_rate)
+        )
+
+        if wrong_index:
+            wrong_index_list.append(wrong_index)
+
+        combined_df.loc[index, 'Commission-WithNew'] = round(money_withnew, 1)
+
+    combined_df['Current Q Commission'] = combined_df['Commission-WithNew'] - combined_df['YTD-Commission']
+
+    if len(bad_index_list) > 0:
+        print("\nFollowing employee(s) is not in commission plan!")
+        print(bad_index_list)
+
+    if len(wrong_index_list) > 0:
+        print("\nFollowing employee(s) has wrong commission plan! For example: T1 amount is 0.0")
+        print(wrong_index_list)
 
     combined_df.to_csv(ca_session.get_booking_result_filename(algorithm_key))
 
+
+def p2f(x):
+    '''
+    convert string with percentage to a float
+    :param x:
+    :return:
+    '''
+    return float(x.strip('%')) / 100
+
+
+def calculate_commission(emp_index, new_booking_total, t1_amount, t2_amount, t3_amount, t4_amount,
+                         t1_rate, t2_rate, t3_rate, t4_rate, t5_rate):
+    if t1_amount == 0.0:
+        # raise ValueError("Wrong commission plan for %d since it's tir 1 amount is 0.0" % emp_index)
+        return 0.0, emp_index
+
+    money_total = 0.0
+    if new_booking_total <= t1_amount:
+        money_total = new_booking_total * t1_rate
+    else:
+        money_total = t1_amount * t1_rate
+        if t2_amount < 0.01 or new_booking_total <= t2_amount:
+            money_total += (new_booking_total - t1_amount) * t2_rate
+        else:
+            money_total += (t2_amount - t1_amount) * t2_rate
+            if t3_amount < 0.01 or new_booking_total <= t3_amount:
+                money_total += (new_booking_total - t2_amount) * t3_rate
+            else:
+                money_total += (t3_amount - t2_amount) * t3_rate
+                if t4_amount < 0.01 or new_booking_total <= t4_amount:
+                    money_total += (new_booking_total - t3_amount) * t4_rate
+                else:
+                    money_total += (t4_amount - t3_amount) * t4_rate
+                    money_total += (new_booking_total - t4_amount) * t5_rate
+
+    return money_total, None
 
 def calculate_row_booking(ca_session, key, emp_index, key_allocated, sales_sfdc_df):
     booking_allocated = 0.0
@@ -139,7 +309,8 @@ def get_perb_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df):
         peb_factor = ca_session.get_perb_sfdc_peb_factor()
         disco_factor = ca_session.get_perb_sfdc_disco_factor(row['DEAL SCORE'])
         newsupport_factor = ca_session.get_perb_sfdc_newsupport_factor(row['RELATIONSHIP TYPE'])
-
+        # if emp_index == 569:
+        #    print("PERB: peb:%0.2f->disco:%0.2f->newsupport:%0.2f" % (peb_factor, disco_factor,newsupport_factor))
         booking_sfdc += row[key.upper()] * peb_factor * disco_factor * newsupport_factor
 
     return booking_sfdc
@@ -159,7 +330,8 @@ def get_acv_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df):
         peb_factor = ca_session.get_acv_sfdc_peb_factor(emp.get_multiplier(), row['RELATIONSHIP TYPE'])
         disco_factor = ca_session.get_acv_sfdc_disco_factor(row['DEAL SCORE'])
         duration_factor = ca_session.get_acv_duration_factor(str(row['DURATION(MONTHS)']))
-
+        # if emp_index == 569:
+        #    print("ACV: peb:%0.2f->disco:%0.2f->duration_factor:%0.2f" % (peb_factor,disco_factor,duration_factor))
         booking_sfdc += row[key.upper()] * peb_factor * disco_factor * duration_factor
 
     return booking_sfdc
