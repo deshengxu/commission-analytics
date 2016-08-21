@@ -74,7 +74,7 @@ def main():
     ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
     print("Done!\n")
     '''
-    '''
+
     print("\n\nStart to allocate based on regular algorithm...")
     ca_utility.allocate_remaining_GEO(ca_session, "regular")
     ca_utility.combine_SFDC_allocation(ca_session, "regular")
@@ -90,7 +90,6 @@ def main():
     ca_utility.roll_up_SFDC_GEO(ca_session, "highest")
     ca_utility.combine_manager_sales(ca_session, "highest")
     print("Done!\n\n\n")
-    '''
 
     print("\n\nStart to allocated based on best guess algorithm...")
     ca_utility.allocate_remaining_GEO(ca_session, "bestguess")
