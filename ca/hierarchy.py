@@ -372,12 +372,13 @@ class Hierarchy:
 
 
 def build_hierarchy_from_csv(csvfile):
-    df = pd.read_csv(csvfile, index_col='EMPLOYEE NO', dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object})
+    df = pd.read_csv(csvfile, index_col='EMPLOYEE NO',
+                     dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object, 'Multiplier': object})
     #print(df)
 
     new_h = Hierarchy()
     for index, row in df.iterrows():
-        # print index, row['NAME']
+        if index == 91661: print index, row['NAME'], row['Multiplier']
         new_sales = salesman.Salesman(str(index), row['NAME'],
                                       str(row['Status'],
                                           str(row['Multiplier'])))  # index has to be converted to string.

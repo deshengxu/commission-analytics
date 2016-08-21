@@ -285,7 +285,7 @@ def regular_bestguess(nonbigdeal_dict, rest, bigdeal_dict, plan_number, ca_sessi
         new_dict[sorted_x[2][0]] = allocated[2]  # 0.0
         new_dict[sorted_x[3][0]] = allocated[3]  # 0.0
         new_dict[sorted_x[4][0]] = allocated[4]
-    elif 12 >= total_sales > 5:
+    elif 15 >= total_sales > 5:
         p_sales, p_booking = ca_session.get_band_way1()
 
         new_dict = allocate_by_segment(sorted_x, p_sales, p_booking, total_sales,
@@ -302,17 +302,16 @@ def regular_bestguess(nonbigdeal_dict, rest, bigdeal_dict, plan_number, ca_sessi
 
 def allocate_by_segment(sorted_dict, p_sales, p_booking, total_sales, plan_number):
     segments = len(p_sales)  # how many segments way1 now is 3, way2 now is 4
-    tp = False
-    if total_sales == 15:
-        tp = True
-
-    # if tp: print(sorted_dict, p_sales, p_booking, total_sales, plan_number)
 
     range_segments = [0] * (segments + 1)
-    for index in range(1, segments):
+    for index in range(1, segments + 1):
         range_segments[index] = range_segments[index - 1] + int(round(p_sales[index - 1] * total_sales, 0))
-    range_segments[segments] = total_sales  # avoid round error
-    # if tp: print(range_segments)
+
+    # avoid round error
+    round_error = range_segments[segments] - total_sales
+    if round_error > 0:
+        for index in range(1, segments + 1):
+            range_segments[index] -= round_error
 
     allocated = [0.0] * total_sales
     for seg_index in range(segments):

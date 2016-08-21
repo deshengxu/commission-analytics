@@ -1,7 +1,7 @@
 import os
 import sys
 import csv
-import pprint
+import numpy
 
 try:
     import ConfigParser
@@ -171,9 +171,11 @@ def calculate_booking(ca_session, algorithm_key):
 
     for index, row in combined_df.iterrows():
         # print(index)
-        # print(row)
-        sales_sfdc_df = cleaned_sfdc_df[cleaned_sfdc_df['EMPLOYEE NO'] == index]
-        # if index == 569:
+        if cleaned_sfdc_df['EMPLOYEE NO'].dtype == 'object':
+            sales_sfdc_df = cleaned_sfdc_df[cleaned_sfdc_df['EMPLOYEE NO'] == str(index)]
+        else:
+            sales_sfdc_df = cleaned_sfdc_df[cleaned_sfdc_df['EMPLOYEE NO'] == index]
+        # if index == 14842:
         #    print(sales_sfdc_df)
         for key in allowed_key:
             booking_allocated, booking_sfdc = calculate_row_booking(
@@ -181,7 +183,7 @@ def calculate_booking(ca_session, algorithm_key):
             combined_df.loc[index, key.upper() + "_ALLOCATED_booking"] = booking_allocated
             combined_df.loc[index, key.upper() + "_SFDC_booking"] = booking_sfdc
 
-            # if index == 569:
+            #if index == 14842:
             #    print("%s->booking_allocated:%0.2f->booking_sfdc:%0.2f" % (key, booking_allocated, booking_sfdc))
 
     combined_df['NewBookingTotal'] = combined_df[booking_summary_cols].sum(axis=1)
@@ -200,8 +202,8 @@ def calculate_booking(ca_session, algorithm_key):
         if not index in available_index_list:
             bad_index_list.append(index)
             continue
-        # if index == 118:
-        #    print(commission_plan_df.loc[118])
+        # if index == 5590:
+        #    print(commission_plan_df.loc[index])
         t1_amount = commission_plan_df.loc[index, ca_session.t1_amount_col]
         t2_amount = commission_plan_df.loc[index, ca_session.t2_amount_col]
         t3_amount = commission_plan_df.loc[index, ca_session.t3_amount_col]
@@ -212,7 +214,7 @@ def calculate_booking(ca_session, algorithm_key):
         t4_rate = commission_plan_df.loc[index, ca_session.t4_rate_col]
         t5_rate = commission_plan_df.loc[index, ca_session.t5_rate_col]
 
-        # if index == 118:
+        #if index == 5590:
         #    print("t1_amount:%0.1f\tt1:%0.2f\tt3:%0.1f\tt4:%0.1f" % (t1_amount, t2_amount, t3_amount, t4_amount))
 
         total_booking = float(row['NewBookingTotal']) + float(row['YTD-Booking'])
@@ -254,7 +256,9 @@ def calculate_commission(emp_index, new_booking_total, t1_amount, t2_amount, t3_
     if t1_amount == 0.0:
         # raise ValueError("Wrong commission plan for %d since it's tir 1 amount is 0.0" % emp_index)
         return 0.0, emp_index
-
+    # if emp_index == 5590:
+    #    print(emp_index, new_booking_total, t1_amount, t2_amount, t3_amount, t4_amount,
+    #                     t1_rate, t2_rate, t3_rate, t4_rate, t5_rate)
     money_total = 0.0
     if new_booking_total <= t1_amount:
         money_total = new_booking_total * t1_rate
@@ -309,7 +313,7 @@ def get_perb_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df):
         peb_factor = ca_session.get_perb_sfdc_peb_factor()
         disco_factor = ca_session.get_perb_sfdc_disco_factor(row['DEAL SCORE'])
         newsupport_factor = ca_session.get_perb_sfdc_newsupport_factor(row['RELATIONSHIP TYPE'])
-        # if emp_index == 569:
+        #if emp_index == 14842:
         #    print("PERB: peb:%0.2f->disco:%0.2f->newsupport:%0.2f" % (peb_factor, disco_factor,newsupport_factor))
         booking_sfdc += row[key.upper()] * peb_factor * disco_factor * newsupport_factor
 
@@ -330,7 +334,9 @@ def get_acv_booking_sfdc(ca_session, key, emp_index, sales_sfdc_df):
         peb_factor = ca_session.get_acv_sfdc_peb_factor(emp.get_multiplier(), row['RELATIONSHIP TYPE'])
         disco_factor = ca_session.get_acv_sfdc_disco_factor(row['DEAL SCORE'])
         duration_factor = ca_session.get_acv_duration_factor(str(row['DURATION(MONTHS)']))
-        # if emp_index == 569:
+        # if emp_index == 14842:
+        #    print("emp:%s-> multiplier:%s->relationship type:%s" % (emp,emp.get_multiplier(), row['RELATIONSHIP TYPE']))
+        #    print("Deration:%s" % str(row['DURATION(MONTHS)']))
         #    print("ACV: peb:%0.2f->disco:%0.2f->duration_factor:%0.2f" % (peb_factor,disco_factor,duration_factor))
         booking_sfdc += row[key.upper()] * peb_factor * disco_factor * duration_factor
 
@@ -1082,7 +1088,6 @@ def filter_booking_SFDC(ca_session):
 
     saleslist = pd.Series(df['EMPLOYEE NO']).unique()
 
-    unique_sales_list = sorted(list(saleslist))
     #print(unique_sales_list)
     # when filter SFDC, all managers and inactive record will be kept.
     # filter SFDC opporunity based on unique sales list.
@@ -1091,7 +1096,13 @@ def filter_booking_SFDC(ca_session):
         filtered_sfdc_file = ca_session.get_filtered_SFDC_filename(sfdc_file)
         ca_session.add_filtered_SFDC_file(filtered_sfdc_file)
         sfdc_df = pd.read_csv(sfdc_file, index_col="OPPORTUNITY NUMBER")
-        filtered_sfdc_df = sfdc_df[(sfdc_df['EMPLOYEE NO']).isin(unique_sales_list)]
+        # print(pd.Series(sfdc_df['EMPLOYEE NO']).unique())
+        if sfdc_df['EMPLOYEE NO'].dtype == 'object':
+            unique_sales_list = sorted([str(x) for x in list(saleslist)])
+        else:
+            unique_sales_list = sorted(list(saleslist))
+        filtered_sfdc_df = sfdc_df[sfdc_df['EMPLOYEE NO'].isin(unique_sales_list)]
+        #print(filtered_sfdc_df)
         filtered_sfdc_df.to_csv(filtered_sfdc_file)
 
     # filter pivot SFDC file based on unique sales list
@@ -1100,6 +1111,7 @@ def filter_booking_SFDC(ca_session):
         filtered_pivot_sfdc_file = ca_session.get_filtered_pivot_SFDC_filename(pivot_file)
         ca_session.add_filtered_pivot_SFDC_file(filtered_pivot_sfdc_file)
         pivot_df = pd.read_csv(pivot_file, index_col="EMPLOYEE NO")
+        unique_sales_list = sorted(list(saleslist))
         filtered_df = pivot_df[(pivot_df.index).isin(unique_sales_list)]
         filtered_df.to_csv(filtered_pivot_sfdc_file)
 

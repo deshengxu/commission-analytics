@@ -3,7 +3,7 @@ import sys
 
 class Salesman:
     # initialize name, ID number, city
-    def __init__(self, emp_no, emp_name, term=None, multiplier=""):
+    def __init__(self, emp_no, emp_name, term=None, multiplier="Unknow"):
         self.__emp_no = emp_no
         self.__emp_name = emp_name
         self.__reporters = []

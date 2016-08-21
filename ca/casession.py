@@ -138,10 +138,10 @@ class CASession:
                 duration = "36"
 
         try:
-            duration_int = int(duration)
-            if duration_int < 24:
+            duration_float = float(duration)
+            if duration_float < 24.0:
                 return self.__sfdc_duration_factor[0]
-            elif 36 > duration_int >= 24:
+            elif 36.0 > duration_float >= 24.0:
                 return self.__sfdc_duration_factor[1]
             else:
                 return self.__sfdc_duration_factor[2]
@@ -157,12 +157,12 @@ class CASession:
 
     def get_acv_sfdc_peb_factor(self, multiplier, relationship_type):
         multiplier = multiplier.strip().replace(" ", "")
-        if '2.7or3xACV'.upper() in multiplier:
+        if '2.7or3xACV'.upper() in multiplier.upper():
             if relationship_type and relationship_type.upper() == 'DIRECT':
                 return self.__peb_sfdc_27or3_direct
             else:
                 return self.__peb_sfdc_27or3_other
-        elif '2XACV'.upper() in multiplier:
+        elif '2XACV'.upper() in multiplier.upper():
             return self.__peb_sfdc_2x
         else:
             return self.__peb_sfdc_other
@@ -790,14 +790,15 @@ class CASession:
 
     def __initialize_hierarchy(self, csvfile):
         df = pd.read_csv(csvfile, index_col='EMPLOYEE NO',
-                         dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object})
+                         dtype={'EMPLOYEE NO': object, 'MANAGER': object, 'Status': object, 'Multiplier': object})
         # print(df)
 
         self.__hierarchy = hierarchy.Hierarchy()
         for index, row in df.iterrows():
             # print index, row['NAME'], row['MANAGER']
             new_sales = salesman.Salesman(str(index), row['NAME'],
-                                          str(row['Status']))  # index has to be converted to string.
+                                          str(row['Status']),
+                                          str(row['Multiplier']))  # index has to be converted to string.
             if pd.notnull(row['MANAGER']):
                 new_sales.set_boss(row['MANAGER'])
                 # print(new_sales)
